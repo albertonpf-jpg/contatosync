@@ -1,0 +1,21 @@
+{
+  "name": "contatosync",
+  "version": "1.0.0",
+  "description": "Sincronizador automático de contatos WhatsApp → Google Contacts / iCloud",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "googleapis": "^140.0.0",
+    "node-fetch": "^2.7.0",
+    "open": "^8.4.2",
+    "pino": "^9.3.2",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

@@ -1,0 +1,7 @@
+node_modules/
+.env
+config/baileys_auth/
+config/google_token.json
+config/icloud_creds.json
+config/sequence.json
+*.log
