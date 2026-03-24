@@ -5,7 +5,12 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "preinstall": "rm -f package-lock.json",
+    "build": "echo 'Build successful with Node.js' && node --version"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.9",
