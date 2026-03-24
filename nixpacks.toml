@@ -1,0 +1,21 @@
+[phases.build]
+dependsOn = ["install"]
+cmds = [
+  "echo 'Removing problematic files...'",
+  "rm -f package-lock.json",
+  "echo 'Installing dependencies with npm...'",
+  "npm install --no-package-lock --legacy-peer-deps"
+]
+
+[phases.install]
+cmds = [
+  "echo 'Setup phase...'",
+  "node --version",
+  "npm --version"
+]
+
+[phases.start]
+cmd = "npm start"
+
+[variables]
+NODE_VERSION = "20"
