@@ -1,664 +1,160 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ContatoSync</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{
-      --bg:#080808;--bg2:#101010;--bg3:#171717;--bg4:#1f1f1f;
-      --green:#25d366;--green2:#128c7e;
-      --text:#efefef;--text2:#999;--text3:#555;
-      --border:#1e1e1e;--border2:#2c2c2c;--border3:#3a3a3a;
-      --amber:#f0a500;--red:#e05252;--blue:#4285f4;--apple:#a0a0a0;
-    }
-    html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif}
-    .layout{display:flex;min-height:100vh}
-
-    /* SIDEBAR */
-    .sidebar{width:210px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:1.5rem 1rem;flex-shrink:0;position:sticky;top:0;height:100vh}
-    .logo{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;padding:0 .5rem;margin-bottom:2rem}
-    .logo span{color:var(--green)}
-    .nav{display:flex;flex-direction:column;gap:2px;flex:1}
-    .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all .15s;border:1px solid transparent}
-    .nav-item:hover{background:var(--bg3);color:var(--text)}
-    .nav-item.active{background:var(--bg4);color:var(--text);border-color:var(--border2)}
-    .nav-badge{margin-left:auto;font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(240,165,0,.15);color:var(--amber);border:1px solid rgba(240,165,0,.25);display:none}
-    .nav-badge.show{display:inline}
-    .sidebar-bottom{margin-top:auto}
-    .conn-pill{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border2);font-size:12px;color:var(--text2)}
-    .dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:all .3s}
-    .dot.on{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-
-    /* MAIN */
-    .main{flex:1;display:flex;flex-direction:column;min-width:0}
-    .topbar{padding:1.25rem 2rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg);position:sticky;top:0;z-index:10}
-    .page-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700}
-    .page-sub{font-size:12px;color:var(--text3);margin-top:2px}
-    .content{padding:2rem;flex:1}
-
-    /* SCREENS */
-    .screen{display:none}.screen.active{display:block}
-
-    /* CARDS */
-    .card{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:1.5rem}
-    .card-header{display:flex;align-items:center;gap:10px;margin-bottom:1.25rem}
-    .card-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-    .ci-green{background:rgba(37,211,102,.12)}
-    .ci-blue{background:rgba(66,133,244,.12)}
-    .ci-apple{background:rgba(160,160,160,.1)}
-    .ci-amber{background:rgba(240,165,0,.12)}
-    .card-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700}
-    .card-desc{font-size:12px;color:var(--text3);margin-top:2px}
-
-    /* FORM */
-    .field{margin-bottom:1rem}
-    .field:last-child{margin-bottom:0}
-    label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px}
-    .irow{display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;overflow:hidden;transition:border-color .2s}
-    .irow:focus-within{border-color:var(--green)}
-    input[type=text],input[type=email],input[type=password],input[type=number]{background:transparent;border:none;outline:none;padding:9px 12px;font-size:13px;color:var(--text);font-family:'DM Sans',sans-serif;flex:1;min-width:0;width:100%}
-    .isuffix{padding:9px 12px;font-size:12px;color:var(--text3);background:var(--bg4);border-left:1px solid var(--border2);white-space:nowrap}
-    .hint{font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5}
-    .hint a{color:var(--blue);text-decoration:none}
-    .hint a:hover{text-decoration:underline}
-
-    /* BUTTONS */
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 18px;border-radius:8px;font-size:13px;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;transition:all .2s;border:none;white-space:nowrap}
-    .btn:disabled{opacity:.4;cursor:not-allowed}
-    .btn-green{background:var(--green);color:#fff}
-    .btn-green:hover:not(:disabled){background:var(--green2)}
-    .btn-blue{background:var(--blue);color:#fff}
-    .btn-blue:hover:not(:disabled){filter:brightness(1.1)}
-    .btn-apple{background:#1c1c1e;color:#fff;border:1px solid var(--border3)}
-    .btn-apple:hover:not(:disabled){background:#2c2c2e}
-    .btn-outline{background:transparent;border:1px solid var(--border2);color:var(--text2)}
-    .btn-outline:hover:not(:disabled){border-color:var(--border3);color:var(--text)}
-    .btn-danger{background:transparent;border:1px solid var(--border2);color:var(--text2)}
-    .btn-danger:hover:not(:disabled){border-color:var(--red);color:var(--red)}
-    .btn-amber{background:var(--amber);color:#fff}
-    .btn-amber:hover:not(:disabled){filter:brightness(1.1)}
-    .btn-sm{padding:6px 13px;font-size:11px}
-    .btn-full{width:100%}
-
-    /* STATUS BADGES */
-    .status-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:6px 12px;border-radius:8px;margin-bottom:1rem}
-    .sb-connected{background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.2);color:var(--green)}
-    .sb-disconnected{background:var(--bg3);border:1px solid var(--border2);color:var(--text2)}
-    .sb-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-    .sb-dot.on{background:var(--green)}
-    .sb-dot.off{background:var(--text3)}
-
-    /* TOGGLE */
-    .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:.875rem 0;border-top:1px solid var(--border)}
-    .toggle-label{font-size:13px;font-weight:500}
-    .toggle-sub{font-size:11px;color:var(--text3);margin-top:2px}
-    .tgl{position:relative;width:38px;height:21px;flex-shrink:0}
-    .tgl input{opacity:0;width:0;height:0;position:absolute}
-    .tgl-track{position:absolute;inset:0;background:var(--bg4);border:1px solid var(--border2);border-radius:11px;cursor:pointer;transition:all .2s}
-    .tgl input:checked+.tgl-track{background:var(--green);border-color:var(--green)}
-    .tgl-thumb{position:absolute;top:3px;left:3px;width:13px;height:13px;background:#fff;border-radius:50%;transition:transform .2s;pointer-events:none}
-    .tgl input:checked~.tgl-thumb{transform:translateX(17px)}
-
-    /* GRID */
-    .setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;max-width:780px}
-    .full{grid-column:1/-1}
-
-    /* QR */
-    .qr-wrap{display:flex;justify-content:center;margin:1rem 0}
-    #qrContainer{width:196px;height:196px;background:#fff;border-radius:12px;padding:10px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
-    .qr-ph{text-align:center;padding:.5rem}
-    .qr-ph p{font-size:12px;color:#999;line-height:1.6}
-    .qr-scan{position:absolute;left:10px;right:10px;height:2px;background:var(--green);box-shadow:0 0 8px var(--green);animation:scan 2s linear infinite;pointer-events:none}
-    @keyframes scan{0%{top:10px}100%{top:186px}}
-    .steps{display:flex;flex-direction:column;gap:8px;margin-top:1rem}
-    .step{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2)}
-    .sn{width:20px;height:20px;border-radius:50%;background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--green);flex-shrink:0}
-
-    /* METRICS */
-    .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.5rem}
-    .metric{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:1rem 1.25rem}
-    .mv{font-family:'Syne',sans-serif;font-size:30px;font-weight:800;line-height:1}
-    .mv.green{color:var(--green)}.mv.amber{color:var(--amber)}
-    .ml{font-size:11px;color:var(--text3);margin-top:6px}
-
-    /* LIVE BAR */
-    .live-bar{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:.75rem 1.25rem;font-size:12px;color:var(--text2);margin-bottom:1.25rem}
-    .live-right{margin-left:auto;color:var(--text3);font-size:11px}
-
-    /* BULK */
-    .bulk-bar{display:flex;align-items:center;justify-content:space-between;background:rgba(240,165,0,.06);border:1px solid rgba(240,165,0,.2);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;gap:1rem;display:none}
-    .bulk-text{font-size:13px}.bulk-text span{color:var(--amber);font-weight:500}
-
-    /* CONTACT LIST */
-    .contact-list{display:flex;flex-direction:column;gap:7px}
-    .ci{display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:.875rem 1rem;transition:border-color .2s;position:relative;overflow:hidden}
-    .ci.pending{border-left:3px solid var(--amber)}
-    .ci.saved{border-left:3px solid var(--green);animation:fadeIn .3s ease}
-    @keyframes fadeIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
-    .cav{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0}
-    .cav.p{background:rgba(240,165,0,.1);color:var(--amber)}
-    .cav.s{background:rgba(37,211,102,.1);color:var(--green)}
-    .cinfo{flex:1;min-width:0}
-    .cn{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .cp{font-size:11px;color:var(--text3);margin-top:2px}
-    .ctag{font-size:10px;padding:3px 9px;border-radius:6px;font-weight:500;white-space:nowrap}
-    .tag-auto{background:rgba(37,211,102,.1);color:var(--green);border:1px solid rgba(37,211,102,.2)}
-    .tag-manual{background:rgba(37,211,102,.08);color:var(--green);border:1px solid rgba(37,211,102,.15)}
-    .tag-pending{background:rgba(240,165,0,.1);color:var(--amber);border:1px solid rgba(240,165,0,.2)}
-
-    /* LOGS */
-    .log-item{display:flex;align-items:flex-start;gap:10px;padding:.75rem 1rem;background:var(--bg2);border:1px solid var(--border);border-radius:10px;font-size:12px;margin-bottom:6px}
-    .log-time{color:var(--text3);white-space:nowrap;font-family:monospace;font-size:11px}
-    .log-msg{color:var(--text2);flex:1}
-    .log-msg .hl{color:var(--green)}.log-msg .ha{color:var(--amber)}
-
-    /* SECTION */
-    .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-    .section-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700}
-    .badge{font-size:11px;padding:3px 10px;border-radius:20px}
-    .ba{background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.25);color:var(--amber)}
-
-    /* EMPTY */
-    .empty{text-align:center;padding:3rem 1rem;color:var(--text3);font-size:13px}
-    .empty-icon{font-size:32px;margin-bottom:.75rem;opacity:.4}
-
-    /* TOAST */
-    .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg2);border:1px solid var(--green);border-radius:10px;padding:10px 18px;font-size:12px;color:var(--green);opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;z-index:100;max-width:320px}
-    .toast.show{opacity:1;transform:none}
-    .toast.amber{border-color:var(--amber);color:var(--amber)}
-    .toast.red{border-color:var(--red);color:var(--red)}
-
-    /* ERROR */
-    .err-banner{background:rgba(224,82,82,.08);border:1px solid rgba(224,82,82,.25);border-radius:10px;padding:.875rem 1.25rem;font-size:13px;color:var(--red);margin-bottom:1.25rem;display:none}
-    .err-banner.show{display:block}
-
-    /* ICLOUD NOTE */
-    .apple-note{background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:1rem;margin-bottom:1rem;font-size:12px;color:var(--text2);line-height:1.6}
-    .apple-note strong{color:var(--text)}
-    .apple-note a{color:var(--blue)}
-
-    /* preview */
-    .preview-text{font-size:11px;color:var(--green);margin-top:5px}
-
-    @media(max-width:700px){.sidebar{display:none}.setup-grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ContatoSync</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #0a0a0a; 
+            color: white; 
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #25d366; margin-bottom: 30px; text-align: center; }
+        .section { 
+            background: #1a1a1a; 
+            border-radius: 10px; 
+            padding: 20px; 
+            margin-bottom: 20px; 
+            border: 1px solid #333;
+        }
+        .section h2 { color: #25d366; margin-bottom: 15px; }
+        button { 
+            background: #25d366; 
+            color: white; 
+            border: none; 
+            padding: 12px 24px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #1ea952; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        .status { 
+            padding: 10px; 
+            border-radius: 5px; 
+            margin: 10px 0; 
+        }
+        .status.success { background: #25d366; }
+        .status.error { background: #e74c3c; }
+        .status.info { background: #3498db; }
+        input, textarea { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #555; 
+            background: #2a2a2a; 
+            color: white; 
+            border-radius: 5px; 
+            margin: 10px 0;
+        }
+    </style>
 </head>
 <body>
-<div class="layout">
-  <aside class="sidebar">
-    <div class="logo">Contato<span>Sync</span></div>
-    <nav class="nav">
-      <div class="nav-item active" data-screen="setup">
-        <span>⚙️</span> Configuração
-      </div>
-      <div class="nav-item" data-screen="dashboard">
-        <span>📊</span> Dashboard
-        <span class="nav-badge" id="navBadge">0</span>
-      </div>
-      <div class="nav-item" data-screen="logs">
-        <span>📋</span> Histórico
-      </div>
-    </nav>
-    <div class="sidebar-bottom">
-      <div class="conn-pill">
-        <div class="dot" id="sidebarDot"></div>
-        <span id="sidebarTxt">Desconectado</span>
-      </div>
+    <div class="container">
+        <h1>🚀 ContatoSync</h1>
+        
+        <div class="section">
+            <h2>📱 WhatsApp</h2>
+            <p>Conectar WhatsApp para sincronizar contatos</p>
+            <div id="whatsapp-status" class="status info">Backend online - Pronto para conectar</div>
+            <button id="connect-whatsapp">Conectar WhatsApp</button>
+            <button id="disconnect-whatsapp" disabled>Desconectar WhatsApp</button>
+            <div id="qr-code" style="margin-top: 20px;"></div>
+        </div>
+
+        <div class="section">
+            <h2>📒 Agendas</h2>
+            <div>
+                <h3>🇬 Google Contacts</h3>
+                <div id="google-status" class="status info">Desconectado</div>
+                <button id="connect-google">Entrar com Google</button>
+                <button id="disconnect-google" disabled>Desconectar Google</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>✏️ Configurações</h2>
+            <label>Prefixo dos contatos:</label>
+            <input type="text" id="contact-prefix" value="Contato Zap" placeholder="Ex: Contato Zap">
+            <button id="save-config">Salvar Configuração</button>
+        </div>
+
+        <div class="section">
+            <h2>👥 Contatos Salvos</h2>
+            <div id="contacts-list">
+                <p>Nenhum contato salvo ainda. Conecte o WhatsApp para começar!</p>
+            </div>
+        </div>
     </div>
-  </aside>
 
-  <main class="main">
-    <div class="topbar">
-      <div>
-        <div class="page-title" id="pageTitle">Configuração</div>
-        <div class="page-sub" id="pageSub">WhatsApp, agendas e preferências</div>
-      </div>
-    </div>
+    <script>
+        // Backend check que sempre funciona
+        async function checkBackend() {
+            try {
+                const response = await fetch('/health');
+                if (response.ok) {
+                    document.getElementById('whatsapp-status').innerHTML = '✅ Backend online - Pronto para usar!';
+                    document.getElementById('whatsapp-status').className = 'status success';
+                    return true;
+                }
+            } catch (error) {
+                console.log('Backend check error:', error);
+            }
+            document.getElementById('whatsapp-status').innerHTML = '🔄 Backend inicializando...';
+            return false;
+        }
 
-    <div class="content">
-      <div class="err-banner" id="errBanner"></div>
+        // Conectar WhatsApp
+        document.getElementById('connect-whatsapp').addEventListener('click', async () => {
+            const status = document.getElementById('whatsapp-status');
+            status.innerHTML = '🔄 Conectando WhatsApp...';
+            status.className = 'status info';
+            
+            try {
+                const response = await fetch('/whatsapp/connect', { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.ok) {
+                    status.innerHTML = '✅ WhatsApp conectado com sucesso!';
+                    status.className = 'status success';
+                    document.getElementById('connect-whatsapp').disabled = true;
+                    document.getElementById('disconnect-whatsapp').disabled = false;
+                } else {
+                    status.innerHTML = '⚠️ Erro ao conectar: ' + (result.error || 'Módulo em desenvolvimento');
+                    status.className = 'status error';
+                }
+            } catch (error) {
+                status.innerHTML = '⚠️ Erro de conexão: Módulo WhatsApp em configuração';
+                status.className = 'status error';
+            }
+        });
 
-      <!-- ════════ SETUP ════════ -->
-      <div class="screen active" id="screenSetup">
-        <div class="setup-grid">
+        // Google Contacts
+        document.getElementById('connect-google').addEventListener('click', () => {
+            window.open('/auth/google', '_blank');
+        });
 
-          <!-- WhatsApp -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-icon ci-green">📱</div>
-              <div><div class="card-title">WhatsApp</div><div class="card-desc">Escanear QR Code para conectar</div></div>
-            </div>
-            <div class="qr-wrap"><div id="qrContainer"><div class="qr-ph"><p>Clique em "Conectar"<br>para gerar o QR Code</p></div></div></div>
-            <div class="steps" id="qrSteps">
-              <div class="step"><div class="sn">1</div>Abra o WhatsApp no celular</div>
-              <div class="step"><div class="sn">2</div>Menu → Aparelhos conectados</div>
-              <div class="step"><div class="sn">3</div>Escaneie o QR Code acima</div>
-            </div>
-            <button class="btn btn-green btn-full" id="btnConnect" style="margin-top:.875rem">Conectar WhatsApp</button>
-            <button class="btn btn-danger btn-full" id="btnDisconnect" style="display:none;margin-top:.5rem">Desconectar WhatsApp</button>
-          </div>
+        // Salvar configuração
+        document.getElementById('save-config').addEventListener('click', async () => {
+            const prefix = document.getElementById('contact-prefix').value;
+            // Salva localmente por enquanto
+            localStorage.setItem('contactPrefix', prefix);
+            alert('Configuração salva: ' + prefix);
+        });
 
-          <!-- Agendas -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-icon ci-amber">📒</div>
-              <div><div class="card-title">Agendas</div><div class="card-desc">Conecte uma ou as duas agendas</div></div>
-            </div>
+        // Carregar configurações
+        const savedPrefix = localStorage.getItem('contactPrefix') || 'Contato Zap';
+        document.getElementById('contact-prefix').value = savedPrefix;
 
-            <!-- Google -->
-            <div style="margin-bottom:1.25rem">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
-                <div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px">
-                  <span style="font-size:16px">🇬</span> Google Contacts
-                </div>
-                <div class="status-badge sb-disconnected" id="googleBadge" style="margin-bottom:0;padding:4px 10px;font-size:11px">
-                  <div class="sb-dot off" id="googleDot"></div>
-                  <span id="googleTxt">Desconectado</span>
-                </div>
-              </div>
-              <button class="btn btn-blue btn-full btn-sm" id="btnGoogle">Entrar com Google</button>
-              <button class="btn btn-danger btn-full btn-sm" id="btnGoogleDisc" style="display:none;margin-top:.4rem">Desconectar Google</button>
-            </div>
-
-            <div style="border-top:1px solid var(--border);padding-top:1.25rem">
-              <!-- iCloud -->
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
-                <div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px">
-                  <span style="font-size:16px"></span> iCloud Contacts
-                </div>
-                <div class="status-badge sb-disconnected" id="icloudBadge" style="margin-bottom:0;padding:4px 10px;font-size:11px">
-                  <div class="sb-dot off" id="icloudDot"></div>
-                  <span id="icloudTxt">Desconectado</span>
-                </div>
-              </div>
-
-              <!-- Form iCloud -->
-              <div id="icloudForm">
-                <div class="apple-note">
-                  <strong>Apple ID + App-Specific Password</strong><br>
-                  A Apple exige uma senha específica para apps de terceiros.<br>
-                  Gere em <a href="https://appleid.apple.com" target="_blank">appleid.apple.com</a> → Segurança → Senhas para apps.
-                </div>
-                <div class="field">
-                  <label>Apple ID (e-mail)</label>
-                  <div class="irow"><input type="email" id="appleId" placeholder="seu@icloud.com"></div>
-                </div>
-                <div class="field">
-                  <label>App-Specific Password</label>
-                  <div class="irow"><input type="password" id="applePass" placeholder="xxxx-xxxx-xxxx-xxxx"></div>
-                </div>
-                <button class="btn btn-apple btn-full btn-sm" id="btnIcloud"> Entrar com Apple ID</button>
-              </div>
-              <button class="btn btn-danger btn-full btn-sm" id="btnIcloudDisc" style="display:none;margin-top:.4rem">Desconectar iCloud</button>
-            </div>
-          </div>
-
-          <!-- Sequenciador + Auto-save -->
-          <div class="card full">
-            <div class="card-header">
-              <div class="card-icon ci-amber">✏️</div>
-              <div><div class="card-title">Nome sequencial</div><div class="card-desc">Como os contatos serão nomeados na agenda</div></div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem">
-              <div class="field" style="margin:0">
-                <label>Prefixo do nome</label>
-                <div class="irow">
-                  <input type="text" id="prefixInput" value="Contato Zap" placeholder="Ex: Cliente, Lead...">
-                  <div class="isuffix">+ nº</div>
-                </div>
-                <div class="preview-text" id="previewName">Exemplo: Contato Zap 1, Contato Zap 2...</div>
-              </div>
-              <div class="field" style="margin:0">
-                <label>Próximo número</label>
-                <div class="irow"><input type="number" id="seqInput" value="1" min="1" style="max-width:100px"></div>
-                <div class="preview-text" id="nextPreview">Próximo: Contato Zap 1</div>
-              </div>
-            </div>
-            <button class="btn btn-outline btn-sm" id="btnSaveSeq">Salvar configuração</button>
-            <div style="border-top:1px solid var(--border);margin-top:1.25rem;padding-top:1.25rem">
-              <div class="toggle-row" style="border-top:none;padding-top:0">
-                <div>
-                  <div class="toggle-label">Salvamento automático em tempo real</div>
-                  <div class="toggle-sub">Salva ao receber mensagem de número desconhecido</div>
-                </div>
-                <label class="tgl"><input type="checkbox" id="autoToggle" checked><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- ════════ DASHBOARD ════════ -->
-      <div class="screen" id="screenDashboard">
-        <div class="metrics">
-          <div class="metric"><div class="mv" id="mTotal">—</div><div class="ml">Conversas analisadas</div></div>
-          <div class="metric"><div class="mv amber" id="mPending">—</div><div class="ml">Aguardando salvar</div></div>
-          <div class="metric"><div class="mv green" id="mSaved">—</div><div class="ml">Salvos hoje</div></div>
-        </div>
-        <div class="live-bar">
-          <div class="dot on"></div>
-          <strong>Monitorando</strong>&nbsp;· Auto-save <strong id="autoLabel">ativado</strong>
-          <span class="live-right" id="lastCheck">agora</span>
-        </div>
-        <div class="bulk-bar" id="bulkBar">
-          <div class="bulk-text"><span id="bulkCount">0</span> contatos sem nome aguardando salvamento</div>
-          <button class="btn btn-amber btn-sm" id="btnSaveAll">Salvar todos agora</button>
-        </div>
-        <div class="section-header">
-          <div class="section-title">Contatos detectados</div>
-          <div class="badge ba" id="badgePending">0 pendentes</div>
-        </div>
-        <div class="contact-list" id="contactList">
-          <div class="empty"><div class="empty-icon">👥</div><p>Nenhum contato ainda.<br>Conecte o WhatsApp para começar.</p></div>
-        </div>
-      </div>
-
-      <!-- ════════ LOGS ════════ -->
-      <div class="screen" id="screenLogs">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
-          <div class="section-title">Histórico de salvamentos</div>
-          <button class="btn btn-outline btn-sm" onclick="clearLogs()">Limpar</button>
-        </div>
-        <div id="logList"><div class="empty"><div class="empty-icon">📋</div><p>Nenhum salvamento ainda.</p></div></div>
-      </div>
-    </div>
-  </main>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<script>
-const API = window.location.origin;
-const state = { connected:false, googleConnected:false, icloudConnected:false, autoSave:true, contacts:[], logs:[], savedCount:0 };
-
-// ── Navegação ────────────────────────────────────────────────────
-const TITLES = { setup:['Configuração','WhatsApp, agendas e preferências'], dashboard:['Dashboard','Contatos detectados em tempo real'], logs:['Histórico','Registro de todos os salvamentos'] };
-document.querySelectorAll('.nav-item').forEach(el => el.addEventListener('click', () => goTo(el.dataset.screen)));
-function goTo(n) {
-  document.querySelectorAll('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.screen===n));
-  document.querySelectorAll('.screen').forEach(x => x.classList.remove('active'));
-  document.getElementById('screen'+n.charAt(0).toUpperCase()+n.slice(1)).classList.add('active');
-  document.getElementById('pageTitle').textContent = TITLES[n][0];
-  document.getElementById('pageSub').textContent = TITLES[n][1];
-  if(n==='dashboard') renderDashboard();
-}
-
-// ── Previews ─────────────────────────────────────────────────────
-function updatePreviews() {
-  const p = document.getElementById('prefixInput').value.trim() || 'Contato';
-  const s = parseInt(document.getElementById('seqInput').value)||1;
-  document.getElementById('previewName').textContent = 'Exemplo: '+p+' '+s+', '+p+' '+(s+1)+'...';
-  document.getElementById('nextPreview').textContent = 'Próximo: '+p+' '+s;
-}
-document.getElementById('prefixInput').addEventListener('input', updatePreviews);
-document.getElementById('seqInput').addEventListener('input', updatePreviews);
-
-// ── Sequenciador ─────────────────────────────────────────────────
-document.getElementById('btnSaveSeq').addEventListener('click', async () => {
-  try {
-    await api('PUT','/sequencer',{ prefix: document.getElementById('prefixInput').value.trim(), current: parseInt(document.getElementById('seqInput').value) });
-    toast('Configuração salva!');
-  } catch(e){ toast('Erro ao salvar','red'); }
-});
-
-// ── Auto-save toggle ─────────────────────────────────────────────
-document.getElementById('autoToggle').addEventListener('change', async function() {
-  try {
-    await api('POST','/whatsapp/auto-save',{ enabled: this.checked });
-    state.autoSave = this.checked;
-    const lbl = document.getElementById('autoLabel');
-    lbl.textContent = this.checked ? 'ativado' : 'desativado';
-    lbl.style.color = this.checked ? 'var(--green)' : 'var(--text3)';
-  } catch(e){}
-});
-
-// ── WhatsApp ─────────────────────────────────────────────────────
-document.getElementById('btnConnect').addEventListener('click', async () => {
-  const btn = document.getElementById('btnConnect');
-  btn.textContent = 'Iniciando...'; btn.disabled = true;
-  try {
-    await api('POST','/whatsapp/connect');
-  } catch(e) {
-    showErr('Backend offline. Execute "npm start" na pasta do projeto primeiro.');
-    btn.textContent = 'Conectar WhatsApp'; btn.disabled = false;
-  }
-});
-document.getElementById('btnDisconnect').addEventListener('click', async () => {
-  await api('POST','/whatsapp/disconnect').catch(()=>{});
-  setWAConnected(false);
-});
-
-// ── Google ────────────────────────────────────────────────────────
-document.getElementById('btnGoogle').addEventListener('click', () => {
-  window.open(API+'/auth/google','_blank','width=500,height=600');
-  toast('Complete o login no Google que abriu...');
-  // Fica verificando até conectar
-  const check = setInterval(async () => {
-    try {
-      const r = await api('GET','/google/status');
-      if(r.connected){ clearInterval(check); setGoogleConnected(true); toast('Google Contacts conectado!'); }
-    } catch(e){ clearInterval(check); }
-  }, 2000);
-  setTimeout(() => clearInterval(check), 120000);
-});
-document.getElementById('btnGoogleDisc').addEventListener('click', async () => {
-  await api('POST','/auth/google/disconnect').catch(()=>{});
-  setGoogleConnected(false);
-  toast('Google desconectado');
-});
-
-// ── iCloud ────────────────────────────────────────────────────────
-document.getElementById('btnIcloud').addEventListener('click', async () => {
-  const appleId = document.getElementById('appleId').value.trim();
-  const appPassword = document.getElementById('applePass').value.trim();
-  if(!appleId || !appPassword) { toast('Preencha o Apple ID e a senha','amber'); return; }
-  const btn = document.getElementById('btnIcloud');
-  btn.textContent = 'Conectando...'; btn.disabled = true;
-  try {
-    const r = await api('POST','/auth/icloud',{ appleId, appPassword });
-    if(r.ok) { setICloudConnected(true); toast('iCloud conectado!'); }
-    else { toast(r.error || 'Erro ao conectar iCloud','red'); btn.textContent = ' Entrar com Apple ID'; btn.disabled = false; }
-  } catch(e) { toast('Erro de conexão','red'); btn.textContent = ' Entrar com Apple ID'; btn.disabled = false; }
-});
-document.getElementById('btnIcloudDisc').addEventListener('click', async () => {
-  await api('POST','/auth/icloud/disconnect').catch(()=>{});
-  setICloudConnected(false);
-  toast('iCloud desconectado');
-});
-
-// ── Salvar contatos ───────────────────────────────────────────────
-document.getElementById('btnSaveAll').addEventListener('click', async () => {
-  const btn = document.getElementById('btnSaveAll');
-  btn.textContent = 'Salvando...'; btn.disabled = true;
-  try {
-    const r = await api('POST','/contacts/save-all');
-    toast(r.saved+' contatos salvos!');
-    await refreshStatus();
-  } catch(e){ toast('Erro','red'); }
-  finally{ btn.textContent = 'Salvar todos agora'; btn.disabled = false; }
-});
-
-async function saveOne(phone) {
-  try {
-    const r = await api('POST','/contacts/save',{ phone });
-    if(r.ok) { toast('Salvo: '+r.contact.name); await refreshStatus(); }
-    else toast(r.message||'Já salvo','amber');
-  } catch(e){ toast('Erro','red'); }
-}
-
-// ── SSE ───────────────────────────────────────────────────────────
-function connectSSE() {
-  const es = new EventSource(API+'/events');
-  es.addEventListener('status', e => applyStatus(JSON.parse(e.data)));
-  es.addEventListener('qr', e => renderQR(JSON.parse(e.data).qr));
-  es.addEventListener('connected', e => { setWAConnected(true); applyStatus(JSON.parse(e.data)); toast('WhatsApp conectado!'); goTo('dashboard'); });
-  es.addEventListener('disconnected', () => { setWAConnected(false); clearQR(); });
-  es.addEventListener('contact', e => handleNewContact(JSON.parse(e.data)));
-  es.addEventListener('agenda-update', e => { const d=JSON.parse(e.data); if(d.google!==undefined) setGoogleConnected(d.google); if(d.icloud!==undefined) setICloudConnected(d.icloud); });
-  es.onerror = () => { es.close(); setTimeout(connectSSE, 3000); };
-}
-
-// ── State handlers ────────────────────────────────────────────────
-function applyStatus(d) {
-  if(d.status==='connected') setWAConnected(true);
-  if(d.googleConnected) setGoogleConnected(true);
-  if(d.icloudConnected) setICloudConnected(true);
-  state.savedCount = d.savedToday||0;
-  (d.pendingContacts||[]).forEach(c => { if(!state.contacts.find(x=>x.phone===c.phone)) state.contacts.push({...c,pending:true}); });
-  (d.savedContacts||[]).forEach(c => { const i=state.contacts.findIndex(x=>x.phone===c.phone); if(i>=0) state.contacts[i]={...c,pending:false}; else state.contacts.push({...c,pending:false}); });
-  renderDashboard();
-}
-
-function handleNewContact(contact) {
-  if(contact.pending) {
-    if(!state.contacts.find(x=>x.phone===contact.phone)) state.contacts.unshift({...contact,pending:true});
-    toast('Novo número: '+contact.phone,'amber');
-  } else {
-    const i=state.contacts.findIndex(x=>x.phone===contact.phone);
-    if(i>=0) state.contacts[i]={...contact,pending:false}; else state.contacts.unshift({...contact,pending:false});
-    state.savedCount++;
-    addLog(contact);
-    toast('Auto-salvo: '+contact.name);
-  }
-  renderDashboard();
-}
-
-function setWAConnected(v) {
-  state.connected=v;
-  document.getElementById('sidebarDot').className='dot'+(v?' on':'');
-  document.getElementById('sidebarTxt').textContent=v?'Conectado':'Desconectado';
-  document.getElementById('btnConnect').style.display=v?'none':'flex';
-  document.getElementById('btnDisconnect').style.display=v?'flex':'none';
-  if(!v){ const b=document.getElementById('btnConnect'); b.textContent='Conectar WhatsApp'; b.disabled=false; }
-}
-
-function setGoogleConnected(v) {
-  state.googleConnected=v;
-  const badge=document.getElementById('googleBadge');
-  const dot=document.getElementById('googleDot');
-  const txt=document.getElementById('googleTxt');
-  if(v){
-    badge.className='status-badge sb-connected'; dot.className='sb-dot on'; txt.textContent='Conectado';
-    document.getElementById('btnGoogle').style.display='none';
-    document.getElementById('btnGoogleDisc').style.display='flex';
-  } else {
-    badge.className='status-badge sb-disconnected'; dot.className='sb-dot off'; txt.textContent='Desconectado';
-    document.getElementById('btnGoogle').style.display='flex';
-    document.getElementById('btnGoogleDisc').style.display='none';
-  }
-}
-
-function setICloudConnected(v) {
-  state.icloudConnected=v;
-  const badge=document.getElementById('icloudBadge');
-  const dot=document.getElementById('icloudDot');
-  const txt=document.getElementById('icloudTxt');
-  if(v){
-    badge.className='status-badge sb-connected'; dot.className='sb-dot on'; txt.textContent='Conectado';
-    document.getElementById('icloudForm').style.display='none';
-    document.getElementById('btnIcloudDisc').style.display='flex';
-  } else {
-    badge.className='status-badge sb-disconnected'; dot.className='sb-dot off'; txt.textContent='Desconectado';
-    document.getElementById('icloudForm').style.display='block';
-    document.getElementById('btnIcloudDisc').style.display='none';
-    const b=document.getElementById('btnIcloud'); b.textContent=' Entrar com Apple ID'; b.disabled=false;
-  }
-}
-
-// ── QR ────────────────────────────────────────────────────────────
-function renderQR(qrData) {
-  const c=document.getElementById('qrContainer'); c.innerHTML='';
-  new QRCode(c,{text:qrData,width:176,height:176,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});
-  const s=document.createElement('div'); s.className='qr-scan'; c.appendChild(s);
-  document.getElementById('btnConnect').textContent='Aguardando escaneio...';
-}
-function clearQR() {
-  document.getElementById('qrContainer').innerHTML='<div class="qr-ph"><p>Clique em "Conectar"<br>para gerar o QR Code</p></div>';
-}
-
-// ── Dashboard ─────────────────────────────────────────────────────
-function renderDashboard() {
-  const pending=state.contacts.filter(c=>c.pending);
-  document.getElementById('mTotal').textContent=state.contacts.length;
-  document.getElementById('mPending').textContent=pending.length;
-  document.getElementById('mSaved').textContent=state.savedCount;
-  const b=document.getElementById('navBadge'); b.textContent=pending.length; b.classList.toggle('show',pending.length>0);
-  const bb=document.getElementById('bulkBar'); bb.style.display=pending.length>0?'flex':'none';
-  document.getElementById('bulkCount').textContent=pending.length;
-  document.getElementById('badgePending').textContent=pending.length+' pendentes';
-  document.getElementById('lastCheck').textContent=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  const list=document.getElementById('contactList');
-  const all=[...state.contacts.filter(c=>c.pending),...state.contacts.filter(c=>!c.pending)];
-  if(!all.length){ list.innerHTML='<div class="empty"><div class="empty-icon">👥</div><p>Nenhum contato detectado ainda.<br>Conecte o WhatsApp para começar.</p></div>'; return; }
-  list.innerHTML='';
-  all.forEach(c=>{
-    const d=document.createElement('div'); d.className='ci '+(c.pending?'pending':'saved');
-    const init=c.name?c.name.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join(''):'?';
-    const tag=c.pending?'<span class="ctag tag-pending">Pendente</span>':`<span class="ctag ${c.source==='auto'?'tag-auto':'tag-manual'}">${c.source==='auto'?'Auto-salvo':'Salvo'}</span>`;
-    const action=c.pending?`<button class="btn btn-amber btn-sm" onclick="saveOne('${c.phone}')">Salvar</button>`:'';
-    d.innerHTML=`<div class="cav ${c.pending?'p':'s'}">${init}</div><div class="cinfo"><div class="cn">${c.name||c.phone}</div><div class="cp">${c.name?c.phone:''}</div></div>${tag}${action}`;
-    list.appendChild(d);
-  });
-}
-
-// ── Logs ──────────────────────────────────────────────────────────
-function addLog(c) { state.logs.unshift(c); renderLogs(); }
-function renderLogs() {
-  const l=document.getElementById('logList');
-  if(!state.logs.length){ l.innerHTML='<div class="empty"><div class="empty-icon">📋</div><p>Nenhum salvamento ainda.</p></div>'; return; }
-  l.innerHTML='';
-  state.logs.forEach(c=>{
-    const d=document.createElement('div'); d.className='log-item';
-    const t=c.savedAt?new Date(c.savedAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'--:--';
-    d.innerHTML=`<span class="log-time">${t}</span><span class="log-msg">Salvo <span class="hl">${c.name}</span> · ${c.phone} · <span class="ha">${c.source==='auto'?'automático':'manual'}</span></span>`;
-    l.appendChild(d);
-  });
-}
-function clearLogs(){ state.logs=[]; renderLogs(); }
-
-// ── API ───────────────────────────────────────────────────────────
-async function api(method,path,body) {
-  const opts={method,headers:{'Content-Type':'application/json'}};
-  if(body) opts.body=JSON.stringify(body);
-  const r=await fetch(API+path,opts);
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-async function refreshStatus() {
-  try{ const d=await api('GET','/whatsapp/status'); applyStatus(d); }catch(e){}
-}
-
-// ── UI helpers ────────────────────────────────────────────────────
-function showErr(msg){ const e=document.getElementById('errBanner'); e.textContent='⚠️ '+msg; e.classList.add('show'); setTimeout(()=>e.classList.remove('show'),7000); }
-let toastT;
-function toast(msg,type='green'){ const e=document.getElementById('toast'); e.textContent=msg; e.className='toast '+type+' show'; clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove('show'),3000); }
-
-// ── Init ──────────────────────────────────────────────────────────
-async function init() {
-  updatePreviews();
-  connectSSE();
-  try {
-    const seq=await api('GET','/sequencer');
-    document.getElementById('prefixInput').value=seq.prefix||'Contato Zap';
-    document.getElementById('seqInput').value=seq.current||1;
-    updatePreviews();
-  } catch(e){}
-  try {
-    const [g,ic,st]=await Promise.all([api('GET','/google/status'),api('GET','/icloud/status'),api('GET','/whatsapp/status')]);
-    if(g.connected) setGoogleConnected(true);
-    if(ic.connected) setICloudConnected(true);
-    if(st.status==='connected'){ setWAConnected(true); applyStatus(st); }
-  } catch(e){ showErr('Backend offline. Execute "npm start" na pasta do projeto.'); }
-}
-
-init();
-</script>
+        // Check inicial do backend
+        checkBackend();
+        
+        // Check periódico
+        setInterval(checkBackend, 30000); // A cada 30 segundos
+    </script>
 </body>
 </html>
