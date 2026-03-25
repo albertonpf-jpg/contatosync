@@ -33,6 +33,9 @@ const config = {
     whatsapp: { sessionPath: './whatsapp_session' }
 };
 
+const CLEAR_WHATSAPP_SESSION_ON_START = true;
+let sessionClearedOnce = false;
+
 let appState = {
     whatsapp: { connected: false, qr: null, phone: null, lastActivity: null, autoSave: true, socket: null },
     google: { connected: false, accessToken: null, refreshToken: null, profile: null, oauth2Client: null },
@@ -45,7 +48,6 @@ let appState = {
 let sseClients = [];
 let baileysModule = null;
 
-// Logger compatível com Baileys (precisa do método .child())
 function makeSilentLogger() {
     const noop = () => {};
     const logger = {
@@ -90,6 +92,15 @@ async function initWhatsApp() {
             fs.mkdirSync(config.whatsapp.sessionPath, { recursive: true });
         }
 
+        if (CLEAR_WHATSAPP_SESSION_ON_START && !sessionClearedOnce) {
+            if (fs.existsSync(config.whatsapp.sessionPath)) {
+                fs.rmSync(config.whatsapp.sessionPath, { recursive: true, force: true });
+                log('🧹 Sessão antiga do WhatsApp removida');
+            }
+            fs.mkdirSync(config.whatsapp.sessionPath, { recursive: true });
+            sessionClearedOnce = true;
+        }
+
         const { state, saveCreds } = await useMultiFileAuthState(config.whatsapp.sessionPath);
         const { version } = await fetchLatestBaileysVersion();
 
@@ -125,7 +136,6 @@ async function initWhatsApp() {
                 log(`📌 Status code: ${statusCode ?? 'undefined'}`);
                 log(`📌 Mensagem do erro: ${lastDisconnect?.error?.message || 'sem mensagem'}`);
                 log(`📌 Nome do erro: ${lastDisconnect?.error?.name || 'sem nome'}`);
-                log(`📌 Stack: ${lastDisconnect?.error?.stack || 'sem stack'}`);
                 log(`Conexão fechada. Reconectando: ${shouldReconnect}`);
 
                 appState.whatsapp.connected = false;
