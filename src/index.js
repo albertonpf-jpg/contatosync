@@ -10,6 +10,14 @@ const { google } = require('googleapis');
 const QRCode = require('qrcode');
 const axios = require('axios');
 
+process.on('uncaughtException', (err) => {
+    console.error('❌ uncaughtException:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+    console.error('❌ unhandledRejection:', reason);
+});
+
 const app = express();
 
 app.use(cors());
@@ -71,18 +79,26 @@ function broadcast(event, data) {
 
 async function initWhatsApp() {
     try {
-        const { makeWASocket, useMultiFileAuthState, DisconnectReason } = await loadBaileys();
+        const {
+            makeWASocket,
+            useMultiFileAuthState,
+            DisconnectReason,
+            fetchLatestBaileysVersion
+        } = await loadBaileys();
 
         if (!fs.existsSync(config.whatsapp.sessionPath)) {
             fs.mkdirSync(config.whatsapp.sessionPath, { recursive: true });
         }
 
         const { state, saveCreds } = await useMultiFileAuthState(config.whatsapp.sessionPath);
+        const { version } = await fetchLatestBaileysVersion();
 
         const sock = makeWASocket({
+            version,
             auth: state,
             printQRInTerminal: false,
-            logger: makeSilentLogger()
+            logger: makeSilentLogger(),
+            browser: ['ContatoSync', 'Chrome', '120.0.0']
         });
 
         appState.whatsapp.socket = sock;
@@ -96,19 +112,37 @@ async function initWhatsApp() {
                     appState.whatsapp.qr = qrCodeUrl;
                     log('QR Code gerado');
                     broadcast('qr', { qr: qrCodeUrl });
-                } catch (e) { log(`Erro QR: ${e.message}`, 'error'); }
+                } catch (e) {
+                    log(`Erro QR: ${e.message}`, 'error');
+                }
             }
 
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
-                const { DisconnectReason: DR } = await loadBaileys();
-                const shouldReconnect = statusCode !== DR.loggedOut;
+                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+                log('❌ Conexão fechada');
+                log(`📌 Status code: ${statusCode ?? 'undefined'}`);
+                log(`📌 Mensagem do erro: ${lastDisconnect?.error?.message || 'sem mensagem'}`);
+                log(`📌 Nome do erro: ${lastDisconnect?.error?.name || 'sem nome'}`);
+                log(`📌 Stack: ${lastDisconnect?.error?.stack || 'sem stack'}`);
                 log(`Conexão fechada. Reconectando: ${shouldReconnect}`);
+
                 appState.whatsapp.connected = false;
                 appState.whatsapp.phone = null;
                 appState.whatsapp.qr = null;
-                broadcast('disconnected', { status: 'disconnected' });
-                if (shouldReconnect) setTimeout(() => initWhatsApp(), 3000);
+
+                broadcast('disconnected', {
+                    status: 'disconnected',
+                    statusCode,
+                    message: lastDisconnect?.error?.message || null
+                });
+
+                if (shouldReconnect) {
+                    setTimeout(() => initWhatsApp(), 3000);
+                } else {
+                    log('🚪 Sessão encerrada com logout. Reconexão automática cancelada.');
+                }
             } else if (connection === 'open') {
                 appState.whatsapp.connected = true;
                 appState.whatsapp.qr = null;
@@ -138,6 +172,7 @@ async function initWhatsApp() {
         return sock;
     } catch (error) {
         log(`Erro ao inicializar WhatsApp: ${error.message}`, 'error');
+        log(`Erro detalhado WhatsApp: ${error.stack || 'sem stack'}`, 'error');
         throw error;
     }
 }
@@ -227,7 +262,9 @@ app.get('/whatsapp/status', (req, res) => {
 
 app.post('/whatsapp/connect', async (req, res) => {
     try {
-        if (appState.whatsapp.connected) return res.json({ ok: true, message: 'Já conectado', phone: appState.whatsapp.phone });
+        if (appState.whatsapp.connected) {
+            return res.json({ ok: true, message: 'Já conectado', phone: appState.whatsapp.phone });
+        }
         log('Iniciando WhatsApp...');
         await initWhatsApp();
         res.json({ ok: true, message: 'Conectando... aguarde o QR Code' });
@@ -249,7 +286,9 @@ app.post('/whatsapp/disconnect', (req, res) => {
         }
         broadcast('disconnected', { status: 'disconnected' });
         res.json({ ok: true });
-    } catch (e) { res.json({ ok: true }); }
+    } catch (e) {
+        res.json({ ok: true });
+    }
 });
 
 app.get('/google/status', (req, res) => {
@@ -257,8 +296,11 @@ app.get('/google/status', (req, res) => {
 });
 
 app.get('/auth/google', (req, res) => {
-    try { res.redirect(initGoogleOAuth()); }
-    catch (e) { res.status(500).send('<html><body><h1>Erro OAuth</h1><button onclick="window.close()">Fechar</button></body></html>'); }
+    try {
+        res.redirect(initGoogleOAuth());
+    } catch (e) {
+        res.status(500).send('<html><body><h1>Erro OAuth</h1><button onclick="window.close()">Fechar</button></body></html>');
+    }
 });
 
 app.get('/auth/google/callback', async (req, res) => {
@@ -279,8 +321,10 @@ app.get('/auth/google/callback', async (req, res) => {
 });
 
 app.post('/auth/google/disconnect', (req, res) => {
-    appState.google.connected = false; appState.google.profile = null;
-    appState.google.accessToken = null; appState.google.oauth2Client = null;
+    appState.google.connected = false;
+    appState.google.profile = null;
+    appState.google.accessToken = null;
+    appState.google.oauth2Client = null;
     broadcast('agenda-update', { google: false });
     res.json({ ok: true });
 });
@@ -302,7 +346,8 @@ app.post('/auth/icloud', async (req, res) => {
 });
 
 app.post('/auth/icloud/disconnect', (req, res) => {
-    appState.icloud.connected = false; appState.icloud.appleId = null;
+    appState.icloud.connected = false;
+    appState.icloud.appleId = null;
     broadcast('agenda-update', { icloud: false });
     res.json({ ok: true });
 });
@@ -323,9 +368,13 @@ app.post('/contacts/save', (req, res) => {
     if (!contact) return res.json({ ok: false, message: 'Não encontrado' });
     if (!contact.pending) return res.json({ ok: false, message: 'Já salvo' });
     const name = `${appState.sequencer.prefix} ${appState.sequencer.current}`;
-    contact.name = name; contact.pending = false;
-    contact.savedAt = new Date().toISOString(); contact.source = 'manual';
-    appState.sequencer.current++; appState.stats.pending--; appState.stats.savedToday++;
+    contact.name = name;
+    contact.pending = false;
+    contact.savedAt = new Date().toISOString();
+    contact.source = 'manual';
+    appState.sequencer.current++;
+    appState.stats.pending--;
+    appState.stats.savedToday++;
     res.json({ ok: true, contact });
 });
 
@@ -335,10 +384,14 @@ app.post('/contacts/save-all', (req, res) => {
     let saved = 0;
     pending.forEach(c => {
         c.name = `${appState.sequencer.prefix} ${appState.sequencer.current}`;
-        c.pending = false; c.savedAt = new Date().toISOString(); c.source = 'bulk';
-        appState.sequencer.current++; saved++;
+        c.pending = false;
+        c.savedAt = new Date().toISOString();
+        c.source = 'bulk';
+        appState.sequencer.current++;
+        saved++;
     });
-    appState.stats.pending = 0; appState.stats.savedToday += saved;
+    appState.stats.pending = 0;
+    appState.stats.savedToday += saved;
     res.json({ ok: true, saved, message: `${saved} contatos salvos` });
 });
 
@@ -383,5 +436,12 @@ app.listen(PORT, () => {
     log('✅ Pronto para conectar WhatsApp');
 });
 
-process.on('SIGTERM', () => { log('Encerrando...'); process.exit(0); });
-process.on('SIGINT', () => { log('Encerrando...'); process.exit(0); });
+process.on('SIGTERM', () => {
+    log('Encerrando por SIGTERM...');
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    log('Encerrando por SIGINT...');
+    process.exit(0);
+});
