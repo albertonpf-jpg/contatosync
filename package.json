@@ -1,26 +1,44 @@
 {
   "name": "contatosync",
-  "version": "1.0.0",
-  "description": "Sincronizador automático de contatos WhatsApp → Google Contacts / iCloud",
+  "version": "2.0.0",
+  "description": "ContatoSync - Sincronizador automático de contatos WhatsApp com integrações reais",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "preinstall": "rm -f package-lock.json",
-    "build": "echo 'Build successful with Node.js' && node --version"
-  },
-  "engines": {
-    "node": ">=20.0.0"
+    "dev": "nodemon src/index.js",
+    "deploy": "npm run start"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.9",
+    "@whiskeysockets/baileys": "^6.6.0",
+    "@hapi/boom": "^10.0.1",
+    "axios": "^1.6.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "googleapis": "^140.0.0",
-    "node-fetch": "^2.7.0",
-    "open": "^8.4.2",
-    "pino": "^9.3.2",
-    "qrcode-terminal": "^0.12.0"
+    "googleapis": "^128.0.0",
+    "qrcode": "^1.5.3",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "whatsapp",
+    "contacts",
+    "sync",
+    "google",
+    "icloud",
+    "baileys",
+    "oauth",
+    "carddav"
+  ],
+  "author": "Alberto Nascimento <albertonpf@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/albertonpf-jpg/contatosync.git"
   }
 }
