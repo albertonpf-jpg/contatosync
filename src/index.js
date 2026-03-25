@@ -9,7 +9,6 @@ const fs = require('fs');
 const { google } = require('googleapis');
 const QRCode = require('qrcode');
 const axios = require('axios');
-const xml2js = require('xml2js');
 
 const app = express();
 
@@ -36,13 +35,24 @@ let appState = {
 };
 
 let sseClients = [];
-let baileys = null;
+let baileysModule = null;
+
+// Logger compatível com Baileys (precisa do método .child())
+function makeSilentLogger() {
+    const noop = () => {};
+    const logger = {
+        level: 'silent',
+        trace: noop, debug: noop, info: noop,
+        warn: noop, error: noop, fatal: noop,
+        child: () => makeSilentLogger()
+    };
+    return logger;
+}
 
 async function loadBaileys() {
-    if (baileys) return baileys;
-    const mod = await import('@whiskeysockets/baileys');
-    baileys = mod;
-    return baileys;
+    if (baileysModule) return baileysModule;
+    baileysModule = await import('@whiskeysockets/baileys');
+    return baileysModule;
 }
 
 function log(message, type = 'info') {
@@ -72,7 +82,7 @@ async function initWhatsApp() {
         const sock = makeWASocket({
             auth: state,
             printQRInTerminal: false,
-            logger: { level: 'silent', trace: ()=>{}, debug: ()=>{}, info: ()=>{}, warn: ()=>{}, error: ()=>{}, fatal: ()=>{} }
+            logger: makeSilentLogger()
         });
 
         appState.whatsapp.socket = sock;
@@ -90,8 +100,9 @@ async function initWhatsApp() {
             }
 
             if (connection === 'close') {
-                const { Boom } = await import('@hapi/boom');
-                const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                const { DisconnectReason: DR } = await loadBaileys();
+                const shouldReconnect = statusCode !== DR.loggedOut;
                 log(`Conexão fechada. Reconectando: ${shouldReconnect}`);
                 appState.whatsapp.connected = false;
                 appState.whatsapp.phone = null;
@@ -136,7 +147,7 @@ function addNewContact(phoneNumber, name = null) {
     const contact = {
         phone: phoneNumber, name, pending: !name,
         detected: new Date().toISOString(),
-        id: `contact_${Date.now()}_${Math.random().toString(36).substr(2,6)}`,
+        id: `contact_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
         source: 'whatsapp'
     };
     appState.contacts.push(contact);
@@ -195,10 +206,7 @@ async function connectICloud(appleId, appPassword) {
     throw new Error('Falha na conexão iCloud');
 }
 
-// ── STATIC ──
 app.use(express.static(path.join(__dirname, '../frontend')));
-
-// ── ROUTES ──
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', uptime: process.uptime(), mode: 'PRODUCTION' });
@@ -220,6 +228,7 @@ app.get('/whatsapp/status', (req, res) => {
 app.post('/whatsapp/connect', async (req, res) => {
     try {
         if (appState.whatsapp.connected) return res.json({ ok: true, message: 'Já conectado', phone: appState.whatsapp.phone });
+        log('Iniciando WhatsApp...');
         await initWhatsApp();
         res.json({ ok: true, message: 'Conectando... aguarde o QR Code' });
     } catch (error) {
@@ -339,7 +348,10 @@ app.get('/events', (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Access-Control-Allow-Origin', '*');
     sseClients.push(res);
-    req.on('close', () => sseClients.splice(sseClients.indexOf(res), 1));
+    req.on('close', () => {
+        const i = sseClients.indexOf(res);
+        if (i !== -1) sseClients.splice(i, 1);
+    });
     res.write(`event: status\ndata: ${JSON.stringify({
         status: appState.whatsapp.connected ? 'connected' : 'disconnected',
         googleConnected: appState.google.connected,
@@ -354,7 +366,7 @@ app.get('/events', (req, res) => {
 app.get('/', (req, res) => {
     const idx = path.join(__dirname, '../frontend/index.html');
     if (fs.existsSync(idx)) res.sendFile(idx);
-    else res.send('<html><body style="background:#0a0a0a;color:#fff;text-align:center;padding:40px"><h1 style="color:#25d366">🚀 ContatoSync</h1><p>Online</p><a href="/health" style="color:#25d366">Health</a></body></html>');
+    else res.send('<html><body style="background:#0a0a0a;color:#fff;text-align:center;padding:40px"><h1 style="color:#25d366">🚀 ContatoSync</h1><p>Online</p></body></html>');
 });
 
 app.use((err, req, res, next) => {
@@ -367,8 +379,8 @@ app.get('*', (req, res) => res.status(404).send('Not found'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     log(`🚀 ContatoSync iniciado na porta ${PORT}`);
-    log('✅ Baileys carregado via import() dinâmico');
-    log('✅ Google OAuth e iCloud prontos');
+    log('✅ Logger Baileys com .child() configurado');
+    log('✅ Pronto para conectar WhatsApp');
 });
 
 process.on('SIGTERM', () => { log('Encerrando...'); process.exit(0); });
