@@ -1,23 +1,22 @@
-'use strict';
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
+import { makeWASocket, useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
+import { google } from 'googleapis';
+import QRCode from 'qrcode';
+import axios from 'axios';
+import xml2js from 'xml2js';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
-// ╔══════════════════════════════════════════════════════════════════════════════╗
-// ║                           🚀 CONTATOSYNC BACKEND                           ║
-// ║                        Backend REAL - Integrações Funcionais               ║
-// ║             WhatsApp (Baileys) + Google OAuth + iCloud CardDAV             ║
-// ╚══════════════════════════════════════════════════════════════════════════════╝
+dotenv.config();
 
-require('dotenv').config();
-
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
-const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
-const { google } = require('googleapis');
-const QRCode = require('qrcode');
-const axios = require('axios');
-const xml2js = require('xml2js');
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -29,11 +28,9 @@ const config = {
     google: {
         clientId: process.env.GOOGLE_CLIENT_ID || 'SEU_GOOGLE_CLIENT_ID',
         clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'SEU_GOOGLE_CLIENT_SECRET',
-        redirectUri: process.env.GOOGLE_REDIRECT_URI || 'https://contatosync.vercel.app/auth/google/callback'
+        redirectUri: process.env.GOOGLE_REDIRECT_URI || 'https://web-production-a17bb.up.railway.app/auth/google/callback'
     },
-    whatsapp: {
-        sessionPath: './whatsapp_session'
-    }
+    whatsapp: { sessionPath: './whatsapp_session' }
 };
 
 let appState = {
@@ -41,8 +38,7 @@ let appState = {
     google: { connected: false, accessToken: null, refreshToken: null, profile: null, oauth2Client: null },
     icloud: { connected: false, appleId: null, lastSync: null, contacts: [] },
     sequencer: { prefix: 'Contato Zap', current: 1 },
-    contacts: [],
-    logs: [],
+    contacts: [], logs: [],
     stats: { total: 0, pending: 0, savedToday: 0 }
 };
 
@@ -60,52 +56,41 @@ function log(message, type = 'info') {
 function broadcast(event, data) {
     const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
     sseClients.forEach(client => {
-        try { client.write(message); } catch (error) { console.log('Cliente SSE desconectado'); }
+        try { client.write(message); } catch (e) {}
     });
 }
 
 async function initWhatsApp() {
     try {
         if (!fs.existsSync(config.whatsapp.sessionPath)) {
-            fs.mkdirSync(config.whatsapp.sessionPath);
+            fs.mkdirSync(config.whatsapp.sessionPath, { recursive: true });
         }
-
         const { state, saveCreds } = await useMultiFileAuthState(config.whatsapp.sessionPath);
-
         const sock = makeWASocket({
             auth: state,
             printQRInTerminal: false,
             logger: { level: 'silent', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, fatal: () => {} }
         });
-
         appState.whatsapp.socket = sock;
 
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
-
             if (qr) {
                 try {
                     const qrCodeUrl = await QRCode.toDataURL(qr);
                     appState.whatsapp.qr = qrCodeUrl;
                     log('QR Code gerado para WhatsApp');
                     broadcast('qr', { qr: qrCodeUrl, message: 'QR Code gerado! Escaneie com seu WhatsApp' });
-                } catch (error) {
-                    log(`Erro ao gerar QR Code: ${error.message}`, 'error');
-                }
+                } catch (error) { log(`Erro ao gerar QR Code: ${error.message}`, 'error'); }
             }
-
             if (connection === 'close') {
                 const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-
                 log(`WhatsApp conexão fechada. Reconectando: ${shouldReconnect}`);
                 appState.whatsapp.connected = false;
                 appState.whatsapp.phone = null;
                 appState.whatsapp.qr = null;
                 broadcast('disconnected', { status: 'disconnected', reason: 'connection_closed' });
-
-                if (shouldReconnect) {
-                    setTimeout(() => initWhatsApp(), 3000);
-                }
+                if (shouldReconnect) setTimeout(() => initWhatsApp(), 3000);
             } else if (connection === 'open') {
                 appState.whatsapp.connected = true;
                 appState.whatsapp.qr = null;
@@ -117,28 +102,19 @@ async function initWhatsApp() {
         });
 
         sock.ev.on('creds.update', saveCreds);
-
         sock.ev.on('contacts.update', (contacts) => {
             contacts.forEach(contact => {
-                if (contact.id && contact.name) {
-                    addNewContact(contact.id.replace('@s.whatsapp.net', ''), contact.name);
-                }
+                if (contact.id && contact.name) addNewContact(contact.id.replace('@s.whatsapp.net', ''), contact.name);
             });
         });
-
         sock.ev.on('messages.upsert', (messageUpdate) => {
-            const messages = messageUpdate.messages;
-            messages.forEach(message => {
+            messageUpdate.messages.forEach(message => {
                 if (message.key && message.key.remoteJid && !message.key.fromMe) {
-                    const phoneNumber = message.key.remoteJid.replace('@s.whatsapp.net', '');
-                    const pushName = message.pushName || null;
-                    addNewContact(phoneNumber, pushName);
+                    addNewContact(message.key.remoteJid.replace('@s.whatsapp.net', ''), message.pushName || null);
                 }
             });
         });
-
         return sock;
-
     } catch (error) {
         log(`Erro ao inicializar WhatsApp: ${error.message}`, 'error');
         throw error;
@@ -146,18 +122,13 @@ async function initWhatsApp() {
 }
 
 function addNewContact(phoneNumber, name = null) {
-    const existingContact = appState.contacts.find(c => c.phone === phoneNumber);
-    if (existingContact) return;
-
+    if (appState.contacts.find(c => c.phone === phoneNumber)) return;
     const contactData = {
-        phone: phoneNumber,
-        name: name,
-        pending: !name,
+        phone: phoneNumber, name, pending: !name,
         detected: new Date().toISOString(),
         id: `contact_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
         source: 'whatsapp'
     };
-
     appState.contacts.push(contactData);
     appState.stats.total++;
     if (contactData.pending) appState.stats.pending++;
@@ -166,18 +137,12 @@ function addNewContact(phoneNumber, name = null) {
 }
 
 function initGoogleOAuth() {
-    const oauth2Client = new google.auth.OAuth2(
-        config.google.clientId,
-        config.google.clientSecret,
-        config.google.redirectUri
-    );
+    const oauth2Client = new google.auth.OAuth2(config.google.clientId, config.google.clientSecret, config.google.redirectUri);
     appState.google.oauth2Client = oauth2Client;
-    const scopes = [
-        'https://www.googleapis.com/auth/contacts.readonly',
-        'https://www.googleapis.com/auth/userinfo.profile',
-        'https://www.googleapis.com/auth/userinfo.email'
-    ];
-    return oauth2Client.generateAuthUrl({ access_type: 'offline', scope: scopes });
+    return oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: ['https://www.googleapis.com/auth/contacts.readonly', 'https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email']
+    });
 }
 
 async function handleGoogleCallback(code) {
@@ -199,41 +164,13 @@ async function handleGoogleCallback(code) {
     }
 }
 
-async function syncGoogleContacts() {
-    if (!appState.google.connected) throw new Error('Google não está conectado');
-    try {
-        const people = google.people('v1');
-        const response = await people.people.connections.list({
-            auth: appState.google.oauth2Client,
-            resourceName: 'people/me',
-            personFields: 'names,emailAddresses,phoneNumbers'
-        });
-        const contacts = response.data.connections || [];
-        contacts.forEach(contact => {
-            const name = contact.names?.[0]?.displayName || 'Sem nome';
-            const phone = contact.phoneNumbers?.[0]?.value || null;
-            if (phone) {
-                const cleanPhone = phone.replace(/\D/g, '');
-                const existingContact = appState.contacts.find(c => c.phone.includes(cleanPhone));
-                if (!existingContact) addNewContact(cleanPhone, name, 'google');
-            }
-        });
-        log(`Sincronização Google: ${contacts.length} contatos processados`);
-        return { ok: true, count: contacts.length };
-    } catch (error) {
-        log(`Erro ao sincronizar Google Contacts: ${error.message}`, 'error');
-        throw error;
-    }
-}
-
 async function connectICloud(appleId, appPassword) {
     try {
-        const cardDavUrl = `https://${appleId}:${appPassword}@contacts.icloud.com/`;
         const response = await axios({
             method: 'PROPFIND',
-            url: cardDavUrl,
+            url: `https://${appleId}:${appPassword}@contacts.icloud.com/`,
             headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Depth': '0' },
-            data: `<?xml version="1.0" encoding="utf-8" ?><D:propfind xmlns:D="DAV:"><D:prop><D:displayname/><D:resourcetype/></D:prop></D:propfind>`,
+            data: `<?xml version="1.0" encoding="utf-8"?><D:propfind xmlns:D="DAV:"><D:prop><D:displayname/><D:resourcetype/></D:prop></D:propfind>`,
             timeout: 10000
         });
         if (response.status === 207) {
@@ -243,56 +180,17 @@ async function connectICloud(appleId, appPassword) {
             log(`iCloud conectado: ${appleId}`);
             broadcast('agenda-update', { icloud: true });
             return { ok: true, message: 'iCloud conectado com sucesso' };
-        } else {
-            throw new Error('Credenciais inválidas');
         }
+        throw new Error('Credenciais inválidas');
     } catch (error) {
-        if (error.response && error.response.status === 401) throw new Error('Credenciais incorretas. Verifique Apple ID e senha de app');
+        if (error.response?.status === 401) throw new Error('Credenciais incorretas. Verifique Apple ID e senha de app');
         throw new Error(`Erro ao conectar iCloud: ${error.message}`);
-    }
-}
-
-async function synciCloudContacts(appleId, appPassword) {
-    try {
-        const cardDavUrl = `https://${appleId}:${appPassword}@contacts.icloud.com/`;
-        const response = await axios({
-            method: 'REPORT',
-            url: cardDavUrl,
-            headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Depth': '1' },
-            data: `<?xml version="1.0" encoding="utf-8" ?><C:addressbook-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav"><D:prop><D:getetag/><C:address-data/></D:prop></C:addressbook-query>`,
-            timeout: 15000
-        });
-        if (response.status === 207) {
-            const parser = new xml2js.Parser();
-            const result = await parser.parseStringPromise(response.data);
-            let contactCount = 0;
-            if (result.multistatus && result.multistatus.response) {
-                for (const responseItem of result.multistatus.response) {
-                    if (responseItem.propstat && responseItem.propstat[0].prop && responseItem.propstat[0].prop[0]['address-data']) {
-                        const vcard = responseItem.propstat[0].prop[0]['address-data'][0];
-                        const contact = parseVCard(vcard);
-                        if (contact.phone) {
-                            const existingContact = appState.contacts.find(c => c.phone.includes(contact.phone.replace(/\D/g, '')));
-                            if (!existingContact) { addNewContact(contact.phone, contact.name, 'icloud'); contactCount++; }
-                        }
-                    }
-                }
-            }
-            log(`Sincronização iCloud: ${contactCount} contatos importados`);
-            return { ok: true, count: contactCount };
-        } else {
-            throw new Error('Erro ao buscar contatos');
-        }
-    } catch (error) {
-        log(`Erro ao sincronizar iCloud: ${error.message}`, 'error');
-        throw error;
     }
 }
 
 function parseVCard(vcard) {
     const lines = vcard.split('\n');
-    let name = null;
-    let phone = null;
+    let name = null, phone = null;
     lines.forEach(line => {
         if (line.startsWith('FN:')) name = line.substring(3).trim();
         if (line.startsWith('TEL:') || line.includes('TYPE=CELL') || line.includes('TYPE=MOBILE')) phone = line.split(':')[1]?.trim();
@@ -303,11 +201,11 @@ function parseVCard(vcard) {
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime(), version: '2.0.0', mode: 'PRODUCTION', integrations: { whatsapp: 'REAL (Baileys)', google: 'REAL (OAuth)', icloud: 'REAL (CardDAV)' } });
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime(), version: '2.0.0', mode: 'PRODUCTION' });
 });
 
 app.get('/whatsapp/status', (req, res) => {
-    res.json({ status: appState.whatsapp.connected ? 'connected' : 'disconnected', connected: appState.whatsapp.connected, phone: appState.whatsapp.phone, qr: appState.whatsapp.qr, lastActivity: appState.whatsapp.lastActivity, autoSave: appState.whatsapp.autoSave, savedToday: appState.stats.savedToday, pendingContacts: appState.contacts.filter(c => c.pending), savedContacts: appState.contacts.filter(c => !c.pending), integration: 'Baileys (WhatsApp Web API)' });
+    res.json({ status: appState.whatsapp.connected ? 'connected' : 'disconnected', connected: appState.whatsapp.connected, phone: appState.whatsapp.phone, qr: appState.whatsapp.qr, lastActivity: appState.whatsapp.lastActivity, autoSave: appState.whatsapp.autoSave, savedToday: appState.stats.savedToday, pendingContacts: appState.contacts.filter(c => c.pending), savedContacts: appState.contacts.filter(c => !c.pending) });
 });
 
 app.post('/whatsapp/connect', async (req, res) => {
@@ -315,7 +213,7 @@ app.post('/whatsapp/connect', async (req, res) => {
         if (appState.whatsapp.connected) return res.json({ ok: true, message: 'WhatsApp já está conectado', phone: appState.whatsapp.phone });
         log('Iniciando conexão WhatsApp via Baileys...');
         await initWhatsApp();
-        res.json({ ok: true, message: 'Conectando WhatsApp... QR Code será gerado em breve', instructions: 'Aguarde o QR Code aparecer e escaneie com seu WhatsApp' });
+        res.json({ ok: true, message: 'Conectando WhatsApp... QR Code será gerado em breve' });
     } catch (error) {
         log(`Erro ao conectar WhatsApp: ${error.message}`, 'error');
         res.status(500).json({ ok: false, error: 'Erro ao conectar WhatsApp' });
@@ -333,21 +231,16 @@ app.post('/whatsapp/disconnect', (req, res) => {
         log('WhatsApp desconectado');
         broadcast('disconnected', { status: 'disconnected' });
         res.json({ ok: true });
-    } catch (error) {
-        log(`Erro ao desconectar WhatsApp: ${error.message}`, 'error');
-        res.json({ ok: true });
-    }
+    } catch (error) { res.json({ ok: true }); }
 });
 
 app.get('/google/status', (req, res) => { res.json({ connected: appState.google.connected, profile: appState.google.profile }); });
 
 app.get('/auth/google', (req, res) => {
     try {
-        const authUrl = initGoogleOAuth();
-        res.redirect(authUrl);
+        res.redirect(initGoogleOAuth());
     } catch (error) {
-        log(`Erro ao gerar URL Google OAuth: ${error.message}`, 'error');
-        res.status(500).send('<html><body style="font-family:Arial;text-align:center;padding:50px;"><h1>Erro de Configuração</h1><p>Configure GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET.</p><button onclick="window.close()">Fechar</button></body></html>');
+        res.status(500).send('<html><body><h1>Erro de Configuração OAuth</h1><button onclick="window.close()">Fechar</button></body></html>');
     }
 });
 
@@ -355,33 +248,35 @@ app.get('/auth/google/callback', async (req, res) => {
     try {
         const { code, error } = req.query;
         if (error) throw new Error(`Erro OAuth: ${error}`);
-        if (!code) throw new Error('Código de autorização não encontrado');
+        if (!code) throw new Error('Código não encontrado');
         const result = await handleGoogleCallback(code);
-        res.send(`<html><head><title>Google OAuth - ContatoSync</title></head><body style="font-family:Arial;text-align:center;padding:50px;background:#0a0a0a;color:white;"><h1 style="color:#25d366;">✅ Google Conectado!</h1><p>Bem-vindo, <strong>${result.profile.name}</strong></p><p>Email: ${result.profile.email}</p><p style="color:#25d366;">Você pode fechar esta janela.</p><script>setTimeout(() => { window.close(); }, 3000);</script></body></html>`);
+        res.send(`<html><head><title>ContatoSync</title></head><body style="font-family:Arial;text-align:center;padding:50px;background:#0a0a0a;color:white;"><h1 style="color:#25d366;">✅ Google Conectado!</h1><p>Bem-vindo, <strong>${result.profile.name}</strong></p><p>${result.profile.email}</p><script>setTimeout(() => window.close(), 3000);</script></body></html>`);
     } catch (error) {
-        log(`Erro no callback Google OAuth: ${error.message}`, 'error');
-        res.send(`<html><body style="font-family:Arial;text-align:center;padding:50px;"><h1>Erro na Autenticação</h1><p>${error.message}</p><button onclick="window.close()">Fechar</button></body></html>`);
+        res.send(`<html><body style="text-align:center;padding:50px;"><h1>Erro</h1><p>${error.message}</p><button onclick="window.close()">Fechar</button></body></html>`);
     }
 });
 
 app.post('/google/sync', async (req, res) => {
     try {
-        if (!appState.google.connected) return res.json({ ok: false, error: 'Google não está conectado' });
-        const result = await syncGoogleContacts();
-        res.json(result);
-    } catch (error) {
-        log(`Erro ao sincronizar Google Contacts: ${error.message}`, 'error');
-        res.status(500).json({ ok: false, error: error.message });
-    }
+        if (!appState.google.connected) return res.json({ ok: false, error: 'Google não conectado' });
+        const people = google.people('v1');
+        const response = await people.people.connections.list({ auth: appState.google.oauth2Client, resourceName: 'people/me', personFields: 'names,phoneNumbers' });
+        const contacts = response.data.connections || [];
+        contacts.forEach(contact => {
+            const name = contact.names?.[0]?.displayName || 'Sem nome';
+            const phone = contact.phoneNumbers?.[0]?.value;
+            if (phone) {
+                const cleanPhone = phone.replace(/\D/g, '');
+                if (!appState.contacts.find(c => c.phone.includes(cleanPhone))) addNewContact(cleanPhone, name, 'google');
+            }
+        });
+        res.json({ ok: true, count: contacts.length });
+    } catch (error) { res.status(500).json({ ok: false, error: error.message }); }
 });
 
 app.post('/auth/google/disconnect', (req, res) => {
-    appState.google.connected = false;
-    appState.google.profile = null;
-    appState.google.accessToken = null;
-    appState.google.refreshToken = null;
-    appState.google.oauth2Client = null;
-    log('Google OAuth desconectado');
+    appState.google.connected = false; appState.google.profile = null;
+    appState.google.accessToken = null; appState.google.refreshToken = null; appState.google.oauth2Client = null;
     broadcast('agenda-update', { google: false });
     res.json({ ok: true });
 });
@@ -391,33 +286,15 @@ app.get('/icloud/status', (req, res) => { res.json({ connected: appState.icloud.
 app.post('/auth/icloud', async (req, res) => {
     try {
         const { appleId, appPassword } = req.body;
-        if (!appleId || !appPassword) return res.json({ ok: false, error: 'Apple ID e senha de app são obrigatórios' });
-        if (!appleId.includes('@')) return res.json({ ok: false, error: 'Apple ID deve ser um email válido' });
-        if (appPassword.length < 8) return res.json({ ok: false, error: 'Senha de app deve ter pelo menos 8 caracteres' });
+        if (!appleId || !appPassword) return res.json({ ok: false, error: 'Apple ID e senha obrigatórios' });
+        if (!appleId.includes('@')) return res.json({ ok: false, error: 'Apple ID deve ser email' });
         const result = await connectICloud(appleId, appPassword);
         res.json(result);
-    } catch (error) {
-        log(`Erro ao conectar iCloud: ${error.message}`, 'error');
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-app.post('/icloud/sync', async (req, res) => {
-    try {
-        if (!appState.icloud.connected) return res.json({ ok: false, error: 'iCloud não está conectado' });
-        const result = await synciCloudContacts(appState.icloud.appleId, req.body.appPassword);
-        res.json(result);
-    } catch (error) {
-        log(`Erro ao sincronizar iCloud: ${error.message}`, 'error');
-        res.status(500).json({ ok: false, error: error.message });
-    }
+    } catch (error) { res.status(500).json({ ok: false, error: error.message }); }
 });
 
 app.post('/auth/icloud/disconnect', (req, res) => {
-    appState.icloud.connected = false;
-    appState.icloud.appleId = null;
-    appState.icloud.lastSync = null;
-    log('iCloud desconectado');
+    appState.icloud.connected = false; appState.icloud.appleId = null; appState.icloud.lastSync = null;
     broadcast('agenda-update', { icloud: false });
     res.json({ ok: true });
 });
@@ -428,55 +305,32 @@ app.put('/sequencer', (req, res) => {
     const { prefix, current } = req.body;
     if (prefix) appState.sequencer.prefix = prefix;
     if (current && !isNaN(current)) appState.sequencer.current = parseInt(current);
-    log(`Sequenciador atualizado: ${appState.sequencer.prefix} #${appState.sequencer.current}`);
     res.json(appState.sequencer);
 });
 
-app.post('/contacts/save', async (req, res) => {
-    try {
-        const { phone } = req.body;
-        if (!phone) return res.json({ ok: false, message: 'Telefone é obrigatório' });
-        const contact = appState.contacts.find(c => c.phone === phone);
-        if (!contact) return res.json({ ok: false, message: 'Contato não encontrado' });
-        if (!contact.pending) return res.json({ ok: false, message: 'Contato já foi salvo' });
-        const name = `${appState.sequencer.prefix} ${appState.sequencer.current}`;
-        contact.name = name;
-        contact.pending = false;
-        contact.savedAt = new Date().toISOString();
-        contact.source = 'manual';
-        appState.sequencer.current++;
-        appState.stats.pending--;
-        appState.stats.savedToday++;
-        log(`Contato salvo: ${name} - ${phone}`);
-        res.json({ ok: true, contact: contact });
-    } catch (error) {
-        log(`Erro ao salvar contato: ${error.message}`, 'error');
-        res.status(500).json({ ok: false, error: 'Erro interno' });
-    }
+app.post('/contacts/save', (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.json({ ok: false, message: 'Telefone obrigatório' });
+    const contact = appState.contacts.find(c => c.phone === phone);
+    if (!contact) return res.json({ ok: false, message: 'Contato não encontrado' });
+    if (!contact.pending) return res.json({ ok: false, message: 'Já salvo' });
+    const name = `${appState.sequencer.prefix} ${appState.sequencer.current}`;
+    contact.name = name; contact.pending = false; contact.savedAt = new Date().toISOString(); contact.source = 'manual';
+    appState.sequencer.current++; appState.stats.pending--; appState.stats.savedToday++;
+    res.json({ ok: true, contact });
 });
 
-app.post('/contacts/save-all', async (req, res) => {
-    try {
-        const pendingContacts = appState.contacts.filter(c => c.pending);
-        if (pendingContacts.length === 0) return res.json({ ok: false, message: 'Nenhum contato pendente para salvar' });
-        let saved = 0;
-        for (const contact of pendingContacts) {
-            const name = `${appState.sequencer.prefix} ${appState.sequencer.current}`;
-            contact.name = name;
-            contact.pending = false;
-            contact.savedAt = new Date().toISOString();
-            contact.source = 'bulk';
-            appState.sequencer.current++;
-            saved++;
-        }
-        appState.stats.pending = 0;
-        appState.stats.savedToday += saved;
-        log(`${saved} contatos salvos em lote`);
-        res.json({ ok: true, saved: saved, message: `${saved} contatos salvos com sucesso` });
-    } catch (error) {
-        log(`Erro ao salvar contatos em lote: ${error.message}`, 'error');
-        res.status(500).json({ ok: false, error: 'Erro interno' });
-    }
+app.post('/contacts/save-all', (req, res) => {
+    const pending = appState.contacts.filter(c => c.pending);
+    if (!pending.length) return res.json({ ok: false, message: 'Nenhum pendente' });
+    let saved = 0;
+    pending.forEach(contact => {
+        const name = `${appState.sequencer.prefix} ${appState.sequencer.current}`;
+        contact.name = name; contact.pending = false; contact.savedAt = new Date().toISOString(); contact.source = 'bulk';
+        appState.sequencer.current++; saved++;
+    });
+    appState.stats.pending = 0; appState.stats.savedToday += saved;
+    res.json({ ok: true, saved, message: `${saved} contatos salvos` });
 });
 
 app.get('/events', (req, res) => {
@@ -484,41 +338,27 @@ app.get('/events', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
     sseClients.push(res);
-    log('Cliente SSE conectado');
-    req.on('close', () => {
-        const index = sseClients.indexOf(res);
-        if (index !== -1) { sseClients.splice(index, 1); log('Cliente SSE desconectado'); }
-    });
+    req.on('close', () => { sseClients.splice(sseClients.indexOf(res), 1); });
     res.write(`event: status\ndata: ${JSON.stringify({ status: appState.whatsapp.connected ? 'connected' : 'disconnected', googleConnected: appState.google.connected, icloudConnected: appState.icloud.connected, savedToday: appState.stats.savedToday, pendingContacts: appState.contacts.filter(c => c.pending), savedContacts: appState.contacts.filter(c => !c.pending), mode: 'PRODUCTION' })}\n\n`);
 });
 
 app.get('/', (req, res) => {
     const indexPath = path.join(__dirname, '../frontend/index.html');
-    res.sendFile(indexPath, (err) => {
-        if (err) res.send('<html><head><title>ContatoSync</title></head><body style="font-family:sans-serif;background:#0a0a0a;color:#efefef;text-align:center;padding:40px"><h1 style="color:#25d366">🚀 ContatoSync</h1><p>Backend Online - MODO PRODUÇÃO</p><a href="/health" style="color:#25d366">Verificar Saúde</a></body></html>');
-    });
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.send('<html><body style="background:#0a0a0a;color:#fff;text-align:center;padding:40px"><h1 style="color:#25d366">🚀 ContatoSync</h1><p>Backend Online</p><a href="/health" style="color:#25d366">Health Check</a></body></html>');
+    }
 });
 
-app.use((err, req, res, next) => {
-    log(`Erro não tratado: ${err.message}`, 'error');
-    res.status(500).json({ error: 'Erro interno do servidor', timestamp: new Date().toISOString() });
-});
-
-app.get('*', (req, res) => {
-    res.status(404).send('<html><body style="font-family:Arial;padding:40px;background:#0a0a0a;color:white;text-align:center;"><h1 style="color:#25d366;">🚀 ContatoSync</h1><h2>404 - Página não encontrada</h2><p><a href="/" style="color:#25d366;">← Voltar ao início</a></p></body></html>');
-});
+app.get('*', (req, res) => { res.status(404).send('Not found'); });
 
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
-    log(`🚀 ContatoSync Backend PRODUÇÃO iniciado na porta ${PORT}`);
-    log(`📍 Acesse: http://localhost:${PORT}`);
-    log('✅ WhatsApp: Baileys (API Real)');
-    log('✅ Google OAuth: API Real com credenciais');
-    log('✅ iCloud: CardDAV API Real');
+    log(`🚀 ContatoSync iniciado na porta ${PORT}`);
+    log('✅ WhatsApp: Baileys | Google: OAuth | iCloud: CardDAV');
 });
 
-process.on('SIGTERM', () => { log('Recebido SIGTERM, encerrando servidor...', 'warn'); process.exit(0); });
-process.on('SIGINT', () => { log('Recebido SIGINT, encerrando servidor...', 'warn'); process.exit(0); });
+process.on('SIGTERM', () => { log('Encerrando...', 'warn'); process.exit(0); });
+process.on('SIGINT', () => { log('Encerrando...', 'warn'); process.exit(0); });
