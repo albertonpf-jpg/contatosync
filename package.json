@@ -1,13 +1,11 @@
 {
   "name": "contatosync",
   "version": "2.0.0",
-  "description": "ContatoSync - Sincronizador automático de contatos WhatsApp com integrações reais",
+  "description": "ContatoSync - Sincronizador automático de contatos WhatsApp",
   "main": "src/index.js",
-  "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "deploy": "npm run start"
+    "dev": "nodemon src/index.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.6.0",
@@ -26,11 +24,6 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": ["whatsapp", "contacts", "sync", "google", "icloud", "baileys", "oauth", "carddav"],
   "author": "Alberto Nascimento <albertonpf@gmail.com>",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/albertonpf-jpg/contatosync.git"
-  }
+  "license": "MIT"
 }
