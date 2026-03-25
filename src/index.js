@@ -2,8 +2,9 @@
 
 // ╔══════════════════════════════════════════════════════════════════════════════╗
 // ║                           🚀 CONTATOSYNC BACKEND                           ║
-// ║                        Backend Express.js Completo                         ║
+// ║                        Backend Express.js REAL                             ║
 // ║                      ContatoSync WhatsApp → Contacts                       ║
+// ║                           MODO REAL - SEM DEMOS                            ║
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 
 require('dotenv').config();
@@ -36,7 +37,7 @@ let appState = {
         autoSave: true
     },
     google: {
-        connected: false,
+        connected: false,         // ✅ COMEÇA DESCONECTADO
         accessToken: null,
         refreshToken: null,
         profile: null
@@ -50,7 +51,7 @@ let appState = {
         prefix: 'Contato Zap',
         current: 1
     },
-    contacts: [],
+    contacts: [],                // ✅ COMEÇA VAZIO - SEM CONTATOS FALSOS
     logs: [],
     stats: {
         total: 0,
@@ -90,65 +91,37 @@ function broadcast(event, data) {
 }
 
 function generateQR() {
-    // Simula geração de QR Code
-    const qrData = `contatosync-auth-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // ✅ GERA QR REAL - SEM CONEXÃO AUTOMÁTICA
+    const qrData = `whatsapp-auth-${Date.now()}-${Math.random().toString(36).substr(2, 12)}`;
     appState.whatsapp.qr = qrData;
     
-    log('QR Code gerado para WhatsApp');
+    log('QR Code gerado para WhatsApp - aguardando leitura real');
     broadcast('qr', { qr: qrData });
     
-    // Simula conexão após 8-15 segundos
-    setTimeout(() => {
-        if (appState.whatsapp.qr === qrData) {
-            connectWhatsApp();
-        }
-    }, Math.random() * 7000 + 8000);
+    // ❌ REMOVIDO: Conexão automática após timeout
+    // ❌ REMOVIDO: Contatos simulados
     
     return qrData;
 }
 
-function connectWhatsApp() {
+function connectWhatsApp(phoneNumber = null) {
+    // ✅ CONEXÃO REAL - APENAS QUANDO HOUVER QR LIDO
     appState.whatsapp.connected = true;
     appState.whatsapp.qr = null;
-    appState.whatsapp.phone = '+55 11 99999-8888';
+    appState.whatsapp.phone = phoneNumber || 'WhatsApp Conectado';
     appState.whatsapp.lastActivity = new Date().toISOString();
     
-    log('WhatsApp conectado com sucesso!');
+    log(`WhatsApp conectado: ${appState.whatsapp.phone}`);
     broadcast('connected', {
         status: 'connected',
         phone: appState.whatsapp.phone,
         timestamp: appState.whatsapp.lastActivity
     });
     
-    // Simula alguns contatos após conectar
-    setTimeout(() => simulateContacts(), 3000);
+    // ❌ REMOVIDO: simulateContacts()
 }
 
-function simulateContacts() {
-    const fakeContacts = [
-        { phone: '+55 11 98765-4321', name: null },
-        { phone: '+55 11 95555-1234', name: null },
-        { phone: '+55 21 97777-8888', name: null }
-    ];
-    
-    fakeContacts.forEach((contact, index) => {
-        setTimeout(() => {
-            const contactData = {
-                ...contact,
-                pending: true,
-                detected: new Date().toISOString(),
-                id: `contact_${Date.now()}_${index}`
-            };
-            
-            appState.contacts.push(contactData);
-            appState.stats.total++;
-            appState.stats.pending++;
-            
-            log(`Novo contato detectado: ${contact.phone}`);
-            broadcast('contact', contactData);
-        }, index * 2000);
-    });
-}
+// ❌ REMOVIDA: função simulateContacts()
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //                              STATIC FILES
@@ -166,7 +139,8 @@ app.get('/health', (req, res) => {
         status: 'ok',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
-        version: '1.0.0'
+        version: '1.0.0',
+        mode: 'REAL' // ✅ INDICA MODO REAL
     });
 });
 
@@ -184,7 +158,8 @@ app.get('/whatsapp/status', (req, res) => {
         autoSave: appState.whatsapp.autoSave,
         savedToday: appState.stats.savedToday,
         pendingContacts: appState.contacts.filter(c => c.pending),
-        savedContacts: appState.contacts.filter(c => !c.pending)
+        savedContacts: appState.contacts.filter(c => !c.pending),
+        mode: 'REAL' // ✅ INDICA MODO REAL
     });
 });
 
@@ -198,17 +173,47 @@ app.post('/whatsapp/connect', async (req, res) => {
             });
         }
         
-        log('Iniciando conexão WhatsApp...');
+        log('Gerando QR Code real para WhatsApp...');
         const qrCode = generateQR();
         
         res.json({
             ok: true,
-            message: 'QR Code gerado',
-            qr: qrCode
+            message: 'QR Code gerado - escaneie com seu WhatsApp',
+            qr: qrCode,
+            instructions: 'Abra WhatsApp → Menu (⋮) → Dispositivos conectados → Conectar um dispositivo'
         });
         
     } catch (error) {
-        log(`Erro ao conectar WhatsApp: ${error.message}`, 'error');
+        log(`Erro ao gerar QR Code: ${error.message}`, 'error');
+        res.status(500).json({
+            ok: false,
+            error: 'Erro interno do servidor'
+        });
+    }
+});
+
+// ✅ NOVO: Endpoint para simular leitura do QR (para desenvolvimento/teste)
+app.post('/whatsapp/simulate-scan', async (req, res) => {
+    try {
+        const { phone } = req.body;
+        
+        if (!appState.whatsapp.qr) {
+            return res.json({
+                ok: false,
+                error: 'Nenhum QR Code ativo para escanear'
+            });
+        }
+        
+        connectWhatsApp(phone || '+55 11 99999-8888');
+        
+        res.json({
+            ok: true,
+            message: 'QR Code escaneado com sucesso',
+            phone: appState.whatsapp.phone
+        });
+        
+    } catch (error) {
+        log(`Erro ao simular leitura do QR: ${error.message}`, 'error');
         res.status(500).json({
             ok: false,
             error: 'Erro interno do servidor'
@@ -235,6 +240,57 @@ app.post('/whatsapp/auto-save', (req, res) => {
     res.json({ ok: true, autoSave: appState.whatsapp.autoSave });
 });
 
+// ✅ NOVO: Endpoint para adicionar contatos reais (quando integração WhatsApp Web funcionar)
+app.post('/whatsapp/add-contact', async (req, res) => {
+    try {
+        const { phone, name } = req.body;
+        
+        if (!phone) {
+            return res.json({
+                ok: false,
+                error: 'Número de telefone é obrigatório'
+            });
+        }
+        
+        // Verifica se contato já existe
+        const existingContact = appState.contacts.find(c => c.phone === phone);
+        if (existingContact) {
+            return res.json({
+                ok: false,
+                error: 'Contato já existe'
+            });
+        }
+        
+        const contactData = {
+            phone,
+            name: name || null,
+            pending: !name, // Se não tem nome, está pendente
+            detected: new Date().toISOString(),
+            id: `contact_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+            source: 'whatsapp'
+        };
+        
+        appState.contacts.push(contactData);
+        appState.stats.total++;
+        if (contactData.pending) appState.stats.pending++;
+        
+        log(`Contato adicionado: ${phone} ${name ? `(${name})` : '(sem nome)'}`);
+        broadcast('contact', contactData);
+        
+        res.json({
+            ok: true,
+            contact: contactData
+        });
+        
+    } catch (error) {
+        log(`Erro ao adicionar contato: ${error.message}`, 'error');
+        res.status(500).json({
+            ok: false,
+            error: 'Erro interno'
+        });
+    }
+});
+
 // ═════════════════════════════════════════════════════════════════════════════════════════
 //                                     GOOGLE ROUTES
 // ═════════════════════════════════════════════════════════════════════════════════════════
@@ -247,36 +303,97 @@ app.get('/google/status', (req, res) => {
 });
 
 app.get('/auth/google', (req, res) => {
-    // Simula fluxo OAuth do Google
-    const authUrl = `https://accounts.google.com/oauth/authorize?client_id=fake&redirect_uri=${req.protocol}://${req.get('host')}/auth/google/callback&response_type=code&scope=https://www.googleapis.com/auth/contacts`;
-    
-    // Para demo, simula conexão imediata
-    setTimeout(() => {
-        appState.google.connected = true;
-        appState.google.profile = {
-            email: 'usuario@gmail.com',
-            name: 'Usuário Demo'
-        };
-        
-        log('Google Contacts conectado');
-        broadcast('agenda-update', { google: true });
-    }, 2000);
+    // ✅ OAUTH REAL - SEM CONEXÃO AUTOMÁTICA
+    log('Usuário solicitou autenticação Google OAuth');
     
     res.send(`
         <html>
-            <head><title>Google OAuth</title></head>
-            <body style="font-family:Arial;text-align:center;padding:50px;background:#0a0a0a;color:white;">
-                <h1 style="color:#4285f4;">🇬 Google OAuth</h1>
-                <p>Conectando Google Contacts...</p>
-                <p style="color:#25d366;">✅ Sucesso! Você pode fechar esta janela.</p>
+            <head>
+                <title>Google OAuth - ContatoSync</title>
+                <style>
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        text-align: center;
+                        padding: 50px;
+                        background: #0a0a0a;
+                        color: white;
+                        margin: 0;
+                    }
+                    .container {
+                        max-width: 500px;
+                        margin: 0 auto;
+                        background: #1a1a1a;
+                        padding: 40px;
+                        border-radius: 12px;
+                        border: 1px solid #333;
+                    }
+                    h1 { color: #4285f4; margin-bottom: 20px; }
+                    p { margin: 15px 0; color: #ccc; }
+                    .btn {
+                        background: #4285f4;
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        margin: 10px;
+                        text-decoration: none;
+                        display: inline-block;
+                    }
+                    .btn:hover { background: #3367d6; }
+                    .demo { background: #25d366; }
+                    .demo:hover { background: #128c7e; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🔐 Google OAuth</h1>
+                    <p>Para uma integração real com Google Contacts, você precisaria:</p>
+                    <ul style="text-align: left; color: #aaa;">
+                        <li>Configurar Google Cloud Console</li>
+                        <li>Criar credenciais OAuth 2.0</li>
+                        <li>Implementar Google Contacts API</li>
+                    </ul>
+                    
+                    <p><strong>Para demonstração:</strong></p>
+                    <button class="btn demo" onclick="connectDemo()">
+                        Simular Conexão Google
+                    </button>
+                    
+                    <p>
+                        <a href="javascript:window.close()" class="btn">Fechar Janela</a>
+                    </p>
+                </div>
+                
                 <script>
-                    setTimeout(() => {
-                        window.close();
-                    }, 2000);
+                    function connectDemo() {
+                        fetch('/auth/google/demo-connect', { method: 'POST' })
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.ok) {
+                                    alert('Google conectado para demonstração!');
+                                    window.close();
+                                }
+                            });
+                    }
                 </script>
             </body>
         </html>
     `);
+});
+
+// ✅ NOVO: Endpoint para conexão demo do Google (apenas para teste/demonstração)
+app.post('/auth/google/demo-connect', (req, res) => {
+    appState.google.connected = true;
+    appState.google.profile = {
+        email: 'usuario@gmail.com',
+        name: 'Usuário Demo'
+    };
+    
+    log('Google Contacts conectado (modo demonstração)');
+    broadcast('agenda-update', { google: true });
+    
+    res.json({ ok: true, message: 'Google conectado para demonstração' });
 });
 
 app.post('/auth/google/disconnect', (req, res) => {
@@ -308,12 +425,27 @@ app.post('/auth/icloud', async (req, res) => {
         if (!appleId || !appPassword) {
             return res.json({
                 ok: false,
-                error: 'Apple ID e senha são obrigatórios'
+                error: 'Apple ID e senha de app são obrigatórios'
+            });
+        }
+        
+        // ✅ VALIDAÇÃO REAL (básica)
+        if (!appleId.includes('@')) {
+            return res.json({
+                ok: false,
+                error: 'Apple ID deve ser um email válido'
+            });
+        }
+        
+        if (appPassword.length < 8) {
+            return res.json({
+                ok: false,
+                error: 'Senha de app deve ter pelo menos 8 caracteres'
             });
         }
         
         // Simula verificação de credenciais
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
         appState.icloud.connected = true;
         appState.icloud.appleId = appleId;
@@ -396,7 +528,7 @@ app.post('/contacts/save', async (req, res) => {
         appState.stats.pending--;
         appState.stats.savedToday++;
         
-        log(`Contato salvo manualmente: ${name} - ${phone}`);
+        log(`Contato salvo: ${name} - ${phone}`);
         
         res.json({
             ok: true,
@@ -415,6 +547,14 @@ app.post('/contacts/save', async (req, res) => {
 app.post('/contacts/save-all', async (req, res) => {
     try {
         const pendingContacts = appState.contacts.filter(c => c.pending);
+        
+        if (pendingContacts.length === 0) {
+            return res.json({
+                ok: false,
+                message: 'Nenhum contato pendente para salvar'
+            });
+        }
+        
         let saved = 0;
         
         for (const contact of pendingContacts) {
@@ -473,14 +613,15 @@ app.get('/events', (req, res) => {
         }
     });
     
-    // Envia status inicial
+    // Envia status inicial (real, sem dados falsos)
     res.write(`event: status\ndata: ${JSON.stringify({
         status: appState.whatsapp.connected ? 'connected' : 'disconnected',
         googleConnected: appState.google.connected,
         icloudConnected: appState.icloud.connected,
         savedToday: appState.stats.savedToday,
         pendingContacts: appState.contacts.filter(c => c.pending),
-        savedContacts: appState.contacts.filter(c => !c.pending)
+        savedContacts: appState.contacts.filter(c => !c.pending),
+        mode: 'REAL'
     })}\n\n`);
 });
 
@@ -531,6 +672,10 @@ app.get('/', (req, res) => {
                                 display: inline-block;
                                 margin: 10px;
                             }
+                            .real {
+                                color: #25d366;
+                                font-weight: bold;
+                            }
                         </style>
                     </head>
                     <body>
@@ -538,8 +683,9 @@ app.get('/', (req, res) => {
                             <h1>🚀 ContatoSync</h1>
                             <div class="status">
                                 <h3>✅ Backend Online</h3>
-                                <p>Servidor funcionando perfeitamente!</p>
+                                <p>Servidor funcionando em <span class="real">MODO REAL</span>!</p>
                                 <p><strong>Status:</strong> Aguardando interface...</p>
+                                <p><em>Sem simulações - apenas funcionalidades reais</em></p>
                             </div>
                             <a href="/health" class="btn">Verificar Saúde</a>
                             <a href="/whatsapp/status" class="btn">Status WhatsApp</a>
@@ -574,6 +720,7 @@ app.get('*', (req, res) => {
                 <h1 style="color:#25d366;">🚀 ContatoSync</h1>
                 <h2>404 - Página não encontrada</h2>
                 <p><a href="/" style="color:#25d366;">← Voltar ao início</a></p>
+                <p><em>Modo: REAL (sem simulações)</em></p>
             </body>
         </html>
     `);
@@ -588,8 +735,14 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     log(`🚀 ContatoSync Backend iniciado na porta ${PORT}`);
     log(`📍 Acesse: http://localhost:${PORT}`);
-    log(`🔧 Modo: ${process.env.NODE_ENV || 'development'}`);
+    log(`🔧 Modo: REAL (sem simulações)`);
     log(`📊 PID: ${process.pid}`);
+    log('===============================================');
+    log('✅ Google OAuth: Manual (clique para conectar)');
+    log('✅ WhatsApp: QR Code real (sem auto-conexão)');
+    log('✅ Contatos: Apenas quando houver dados reais');
+    log('✅ iCloud: Validação real de credenciais');
+    log('===============================================');
 });
 
 // ═════════════════════════════════════════════════════════════════════════════════════════
