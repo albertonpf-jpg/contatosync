@@ -149,6 +149,7 @@ async function startWhatsApp(onQR, onConnected, onDisconnected, onNewContact) {
     printQRInTerminal: false,
     generateHighQualityLinkPreview: false,
     syncFullHistory: false,
+    browser: ['ContatoSync', 'Chrome', '120.0.0'],
   });
 
   sock.ev.on('connection.update', async (update) => {
