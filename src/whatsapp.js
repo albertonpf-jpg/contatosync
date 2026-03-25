@@ -112,7 +112,7 @@ function addPending(phone) {
 }
 
 async function syncHistory(socket) {
-  console.log('🔄 Sincronizando histórico...');
+  console.log('🔄 Sincronizando histórico.');
   const batchSize = parseInt(process.env.BATCH_SIZE || '10');
   const batchDelay = parseInt(process.env.BATCH_DELAY_MS || '2000');
   try {
@@ -141,7 +141,8 @@ async function startWhatsApp(onQR, onConnected, onDisconnected, onNewContact) {
   const { version } = await fetchLatestBaileysVersion();
 
   sock = makeWASocket({
-    version, logger,
+    version,
+    logger,
     auth: {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -154,12 +155,15 @@ async function startWhatsApp(onQR, onConnected, onDisconnected, onNewContact) {
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
+
     if (qr) {
       qrCodeData = qr;
       connectionStatus = 'connecting';
       qrcodeTerminal.generate(qr, { small: true });
+      console.log('📲 QR Code recebido, aguardando leitura...');
       onQR && onQR(qr);
     }
+
     if (connection === 'open') {
       qrCodeData = null;
       connectionStatus = 'connected';
@@ -167,14 +171,31 @@ async function startWhatsApp(onQR, onConnected, onDisconnected, onNewContact) {
       onConnected && onConnected();
       syncHistory(sock);
     }
+
     if (connection === 'close') {
-      const code = lastDisconnect && lastDisconnect.error && lastDisconnect.error.output && lastDisconnect.error.output.statusCode;
+      const code =
+        lastDisconnect &&
+        lastDisconnect.error &&
+        lastDisconnect.error.output &&
+        lastDisconnect.error.output.statusCode;
+
       connectionStatus = 'disconnected';
       qrCodeData = null;
+
+      console.log('❌ Conexão fechada');
+      console.log('📌 Status code:', code);
+      console.log('📌 lastDisconnect completo:', lastDisconnect);
+      console.log('📌 erro bruto:', lastDisconnect?.error);
+      console.log('📌 mensagem do erro:', lastDisconnect?.error?.message);
+      console.log('📌 stack:', lastDisconnect?.error?.stack);
+
       onDisconnected && onDisconnected(code);
+
       if (code !== DisconnectReason.loggedOut) {
         console.log('🔁 Reconectando em 3s...');
         setTimeout(() => startWhatsApp(onQR, onConnected, onDisconnected, onNewContact), 3000);
+      } else {
+        console.log('🚪 Sessão deslogada. Reconexão automática cancelada.');
       }
     }
   });
@@ -183,15 +204,20 @@ async function startWhatsApp(onQR, onConnected, onDisconnected, onNewContact) {
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
+
     for (const msg of messages) {
       const jid = msg.key.remoteJid;
       if (!jid || !isPersonJid(jid)) continue;
       if (msg.key.fromMe) continue;
+
       const phone = normalizePhone(jid);
       const normalized = phone.replace(/[\s\-().]/g, '');
+
       if (knownNumbers.has(normalized)) continue;
       if (savedToday.find((c) => c.phone === normalized)) continue;
+
       console.log('📩 Nova mensagem de: ' + phone);
+
       if (autoSaveEnabled) {
         const saved = await trySaveContact(phone, 'auto');
         if (saved) onNewContact && onNewContact(saved);
@@ -204,6 +230,7 @@ async function startWhatsApp(onQR, onConnected, onDisconnected, onNewContact) {
 }
 
 async function saveContactManually(phone) { return trySaveContact(phone, 'manual'); }
+
 async function saveAllPending() {
   const results = [];
   for (const c of [...pendingContacts]) {
@@ -213,8 +240,20 @@ async function saveAllPending() {
   }
   return results;
 }
+
 function disconnect() {
-  if (sock) { sock.logout(); sock = null; connectionStatus = 'disconnected'; }
+  if (sock) {
+    sock.logout();
+    sock = null;
+    connectionStatus = 'disconnected';
+  }
 }
 
-module.exports = { startWhatsApp, getStatus, setAutoSave, saveContactManually, saveAllPending, disconnect };
+module.exports = {
+  startWhatsApp,
+  getStatus,
+  setAutoSave,
+  saveContactManually,
+  saveAllPending,
+  disconnect
+};
