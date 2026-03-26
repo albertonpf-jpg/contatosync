@@ -83,6 +83,16 @@ function jidToPhone(jid) {
 
 const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
+// Gera o nome do contato: "Contato Zap 1 - Alberto" (se tiver pushName) ou "Contato Zap 1"
+function buildContactName(pushName) {
+    const base = appState.sequencer.prefix + ' ' + appState.sequencer.current;
+    if (pushName && pushName.trim()) {
+        const firstName = pushName.trim().split(' ')[0]; // pega só o primeiro nome
+        return base + ' - ' + firstName;
+    }
+    return base;
+}
+
 async function saveContactToGoogle(phone, name) {
     if (!appState.google.connected || !appState.google.oauth2Client) throw new Error('Google não conectado');
     const peopleApi = google.people({ version: 'v1', auth: appState.google.oauth2Client });
@@ -96,7 +106,6 @@ async function saveContactToGoogle(phone, name) {
     return true;
 }
 
-// Verifica se o numero ja esta salvo na agenda do Google
 async function isPhoneInGoogle(phone) {
     if (!appState.google.connected || !appState.google.oauth2Client) return false;
     try {
@@ -112,18 +121,10 @@ async function isPhoneInGoogle(phone) {
     }
 }
 
-// Sincroniza historico de conversas de forma segura
-// Lotes de 5 contatos com 3s de delay entre lotes para evitar banimento
 async function syncHistory() {
-    if (appState.sync.running) {
-        return { ok: false, message: 'Sincronização já em andamento' };
-    }
-    if (!appState.whatsapp.connected || !appState.whatsapp.socket) {
-        return { ok: false, message: 'WhatsApp não conectado' };
-    }
-    if (!appState.google.connected && !appState.icloud.connected) {
-        return { ok: false, message: 'Nenhuma agenda conectada' };
-    }
+    if (appState.sync.running) return { ok: false, message: 'Sincronização já em andamento' };
+    if (!appState.whatsapp.connected || !appState.whatsapp.socket) return { ok: false, message: 'WhatsApp não conectado' };
+    if (!appState.google.connected && !appState.icloud.connected) return { ok: false, message: 'Nenhuma agenda conectada' };
 
     appState.sync.running = true;
     appState.sync.progress = 0;
@@ -134,11 +135,8 @@ async function syncHistory() {
 
     try {
         const sock = appState.whatsapp.socket;
-
-        // Buscar chats do store local do Baileys (sem fazer requisicoes ao servidor)
         let chats = [];
         try {
-            // O Baileys expoe chats via store em memória
             if (sock.store && sock.store.chats) {
                 chats = Array.from(sock.store.chats.values ? sock.store.chats.values() : Object.values(sock.store.chats));
             } else if (sock.chats) {
@@ -148,7 +146,6 @@ async function syncHistory() {
             debugLog('Nao foi possivel acessar store de chats: ' + e.message);
         }
 
-        // Filtrar apenas conversas individuais (nao grupos, nao broadcast)
         const individualChats = chats.filter(c => {
             const id = c.id || c.jid || '';
             return !id.endsWith('@g.us') && !id.endsWith('@broadcast') && id.includes('@');
@@ -159,7 +156,7 @@ async function syncHistory() {
         broadcast('sync-update', { ...appState.sync, status: 'processando', total: individualChats.length });
 
         const BATCH_SIZE = 5;
-        const BATCH_DELAY = 3000; // 3 segundos entre lotes
+        const BATCH_DELAY = 3000;
 
         for (let i = 0; i < individualChats.length; i += BATCH_SIZE) {
             const batch = individualChats.slice(i, i + BATCH_SIZE);
@@ -168,60 +165,40 @@ async function syncHistory() {
                 const jid = chat.id || chat.jid || '';
                 const phone = jidToPhone(jid);
 
-                if (!phone) {
-                    appState.sync.skipped++;
-                    debugLog('Pulado (sem numero real): ' + jid);
-                    continue;
-                }
+                if (!phone) { appState.sync.skipped++; continue; }
 
-                // Ja existe no sistema local?
                 const jaNoSistema = appState.contacts.find(c => c.phone === phone);
-                if (jaNoSistema) {
-                    appState.sync.skipped++;
-                    debugLog('Ja no sistema: ' + phone);
-                    continue;
-                }
+                if (jaNoSistema) { appState.sync.skipped++; continue; }
 
-                // Ja esta na agenda do Google?
                 const jaNoGoogle = await isPhoneInGoogle(phone);
                 if (jaNoGoogle) {
                     appState.sync.skipped++;
-                    debugLog('Ja na agenda: ' + phone);
-                    // Registrar localmente mesmo assim
                     appState.contacts.push({
                         phone, name: chat.name || null, pending: false,
                         hasRealPhone: true, savedToAgenda: true,
-                        detected: new Date().toISOString(),
-                        savedAt: new Date().toISOString(),
+                        detected: new Date().toISOString(), savedAt: new Date().toISOString(),
                         id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
                         source: 'sync-existing'
                     });
                     continue;
                 }
 
-                // Salvar novo contato
-                const name = appState.sequencer.prefix + ' ' + appState.sequencer.current;
+                // Usa nome do chat se disponivel para gerar nome mais descritivo
+                const name = buildContactName(chat.name || null);
                 appState.sequencer.current++;
 
                 let savedAgenda = false;
                 let erroAgenda = null;
 
                 if (appState.google.connected) {
-                    try {
-                        await saveContactToGoogle(phone, name);
-                        savedAgenda = true;
-                    } catch (e) {
-                        erroAgenda = e.message;
-                        debugLog('Erro ao salvar ' + phone + ': ' + e.message);
-                        appState.sync.errors++;
-                    }
+                    try { await saveContactToGoogle(phone, name); savedAgenda = true; }
+                    catch (e) { erroAgenda = e.message; appState.sync.errors++; }
                 }
 
                 const contact = {
                     phone, name, pending: false, hasRealPhone: true,
                     savedToAgenda: savedAgenda, erroAgenda: erroAgenda || null,
-                    detected: new Date().toISOString(),
-                    savedAt: new Date().toISOString(),
+                    detected: new Date().toISOString(), savedAt: new Date().toISOString(),
                     id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
                     source: 'sync'
                 };
@@ -231,36 +208,21 @@ async function syncHistory() {
                 appState.stats.savedToday++;
                 if (savedAgenda) appState.sync.saved++;
                 broadcast('contact', contact);
-                debugLog('Sincronizado: ' + name + ' (' + phone + ')');
             }
 
             appState.sync.progress = Math.min(i + BATCH_SIZE, individualChats.length);
             broadcast('sync-update', { ...appState.sync, status: 'processando' });
-
-            // Delay entre lotes para nao sobrecarregar o WhatsApp
-            if (i + BATCH_SIZE < individualChats.length) {
-                debugLog('Aguardando ' + BATCH_DELAY + 'ms antes do proximo lote...');
-                await delay(BATCH_DELAY);
-            }
+            if (i + BATCH_SIZE < individualChats.length) await delay(BATCH_DELAY);
         }
 
         appState.sync.running = false;
         appState.sync.lastRun = new Date().toISOString();
-        const resultado = {
-            ok: true,
-            saved: appState.sync.saved,
-            skipped: appState.sync.skipped,
-            errors: appState.sync.errors,
-            total: appState.sync.total
-        };
-        log('Sincronizacao concluida: ' + appState.sync.saved + ' salvos, ' + appState.sync.skipped + ' ja existiam, ' + appState.sync.errors + ' erros');
         broadcast('sync-update', { ...appState.sync, status: 'concluido' });
-        return resultado;
+        return { ok: true, saved: appState.sync.saved, skipped: appState.sync.skipped, errors: appState.sync.errors, total: appState.sync.total };
 
     } catch (e) {
         appState.sync.running = false;
         broadcast('sync-update', { ...appState.sync, status: 'erro', message: e.message });
-        debugLog('Erro na sincronizacao: ' + e.message);
         return { ok: false, message: e.message };
     }
 }
@@ -269,9 +231,7 @@ async function initWhatsApp() {
     try {
         const { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = await loadBaileys();
 
-        if (!fs.existsSync(config.whatsapp.sessionPath)) {
-            fs.mkdirSync(config.whatsapp.sessionPath, { recursive: true });
-        }
+        if (!fs.existsSync(config.whatsapp.sessionPath)) fs.mkdirSync(config.whatsapp.sessionPath, { recursive: true });
 
         if (CLEAR_WHATSAPP_SESSION_ON_START && !sessionClearedOnce) {
             if (fs.existsSync(config.whatsapp.sessionPath)) {
@@ -310,11 +270,8 @@ async function initWhatsApp() {
                 appState.whatsapp.phone = null;
                 appState.whatsapp.qr = null;
                 broadcast('disconnected', { status: 'disconnected', statusCode });
-                if (shouldReconnect) {
-                    setTimeout(() => initWhatsApp(), 3000);
-                } else {
-                    log('🚪 Sessão encerrada com logout.');
-                }
+                if (shouldReconnect) setTimeout(() => initWhatsApp(), 3000);
+                else log('🚪 Sessão encerrada com logout.');
             } else if (connection === 'open') {
                 appState.whatsapp.connected = true;
                 appState.whatsapp.qr = null;
@@ -342,7 +299,8 @@ async function initWhatsApp() {
                 const jaExiste = appState.contacts.find(c => c.phone === phone);
                 if (jaExiste) continue;
 
-                const name = appState.sequencer.prefix + ' ' + appState.sequencer.current;
+                // Gera nome com primeiro nome do pushName: "Contato Zap 1 - Alberto"
+                const name = buildContactName(msg.pushName);
                 appState.sequencer.current++;
 
                 let savedAgenda = false;
@@ -356,8 +314,7 @@ async function initWhatsApp() {
                 const contact = {
                     phone, name, pending: false, hasRealPhone: true,
                     savedToAgenda: savedAgenda, erroAgenda: erroAgenda || null,
-                    detected: new Date().toISOString(),
-                    savedAt: new Date().toISOString(),
+                    detected: new Date().toISOString(), savedAt: new Date().toISOString(),
                     id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
                     source: 'whatsapp'
                 };
@@ -428,13 +385,8 @@ async function connectICloud(appleId, appPassword) {
 
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', uptime: process.uptime(), mode: 'PRODUCTION' });
-});
-
-app.get('/debug/logs', (req, res) => {
-    res.json({ logs: debugLogs });
-});
+app.get('/health', (req, res) => { res.json({ status: 'ok', uptime: process.uptime(), mode: 'PRODUCTION' }); });
+app.get('/debug/logs', (req, res) => { res.json({ logs: debugLogs }); });
 
 app.get('/whatsapp/status', (req, res) => {
     res.json({
@@ -449,22 +401,12 @@ app.get('/whatsapp/status', (req, res) => {
     });
 });
 
-// Nova rota: status da sincronizacao
-app.get('/sync/status', (req, res) => {
-    res.json(appState.sync);
-});
-
-// Nova rota: iniciar sincronizacao de historico
-app.post('/sync/history', async (req, res) => {
-    const result = await syncHistory();
-    res.json(result);
-});
+app.get('/sync/status', (req, res) => { res.json(appState.sync); });
+app.post('/sync/history', async (req, res) => { const result = await syncHistory(); res.json(result); });
 
 app.post('/whatsapp/connect', async (req, res) => {
     try {
-        if (appState.whatsapp.connected) {
-            return res.json({ ok: true, message: 'Já conectado', phone: appState.whatsapp.phone });
-        }
+        if (appState.whatsapp.connected) return res.json({ ok: true, message: 'Já conectado', phone: appState.whatsapp.phone });
         log('Iniciando WhatsApp...');
         await initWhatsApp();
         res.json({ ok: true, message: 'Conectando... aguarde o QR Code' });
@@ -481,17 +423,13 @@ app.post('/whatsapp/disconnect', (req, res) => {
         appState.whatsapp.qr = null;
         appState.whatsapp.phone = null;
         appState.whatsapp.socket = null;
-        if (fs.existsSync(config.whatsapp.sessionPath)) {
-            fs.rmSync(config.whatsapp.sessionPath, { recursive: true, force: true });
-        }
+        if (fs.existsSync(config.whatsapp.sessionPath)) fs.rmSync(config.whatsapp.sessionPath, { recursive: true, force: true });
         broadcast('disconnected', { status: 'disconnected' });
         res.json({ ok: true });
     } catch (e) { res.json({ ok: true }); }
 });
 
-app.get('/google/status', (req, res) => {
-    res.json({ connected: appState.google.connected, profile: appState.google.profile });
-});
+app.get('/google/status', (req, res) => { res.json({ connected: appState.google.connected, profile: appState.google.profile }); });
 
 app.get('/auth/google', (req, res) => {
     try { res.redirect(initGoogleOAuth()); }
@@ -505,9 +443,7 @@ app.get('/auth/google/callback', async (req, res) => {
         if (!code) throw new Error('Código não encontrado');
         const result = await handleGoogleCallback(code);
         res.send('<h2>✅ Google Conectado!</h2><p>Bem-vindo, <b>' + result.profile.name + '</b></p><p>' + result.profile.email + '</p><script>setTimeout(()=>window.close(),2000)</script>');
-    } catch (e) {
-        res.send('<h2>Erro</h2><p>' + e.message + '</p>');
-    }
+    } catch (e) { res.send('<h2>Erro</h2><p>' + e.message + '</p>'); }
 });
 
 app.post('/auth/google/disconnect', (req, res) => {
@@ -519,9 +455,7 @@ app.post('/auth/google/disconnect', (req, res) => {
     res.json({ ok: true });
 });
 
-app.get('/icloud/status', (req, res) => {
-    res.json({ connected: appState.icloud.connected, appleId: appState.icloud.appleId });
-});
+app.get('/icloud/status', (req, res) => { res.json({ connected: appState.icloud.connected, appleId: appState.icloud.appleId }); });
 
 app.post('/auth/icloud', async (req, res) => {
     try {
@@ -530,9 +464,7 @@ app.post('/auth/icloud', async (req, res) => {
         const result = await connectICloud(appleId, appPassword);
         res.json(result);
     } catch (e) {
-        if (e.response?.status === 401 || e.message.includes('Credenciais')) {
-            return res.status(401).json({ ok: false, error: e.message });
-        }
+        if (e.response?.status === 401 || e.message.includes('Credenciais')) return res.status(401).json({ ok: false, error: e.message });
         res.status(500).json({ ok: false, error: e.message });
     }
 });
@@ -558,7 +490,8 @@ app.post('/contacts/save', async (req, res) => {
     const contact = appState.contacts.find(c => c.id === contactId || c.phone === contactId);
     if (!contact) return res.json({ ok: false, message: 'Contato não encontrado' });
     if (!contact.pending) return res.json({ ok: false, message: 'Já salvo' });
-    const name = appState.sequencer.prefix + ' ' + appState.sequencer.current;
+    // Usa pushName armazenado no contato pendente se disponível
+    const name = buildContactName(contact.pushName || null);
     if (appState.google.connected) {
         try { await saveContactToGoogle(contact.phone, name); } catch (e) { debugLog('Erro Google: ' + e.message); }
     }
@@ -577,7 +510,7 @@ app.post('/contacts/save-all', async (req, res) => {
     if (!pending.length) return res.json({ ok: false, message: 'Nenhum pendente' });
     let saved = 0;
     for (const c of pending) {
-        const name = appState.sequencer.prefix + ' ' + appState.sequencer.current;
+        const name = buildContactName(c.pushName || null);
         if (appState.google.connected) {
             try { await saveContactToGoogle(c.phone, name); } catch (e) {}
         }
