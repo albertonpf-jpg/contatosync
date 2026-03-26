@@ -38,7 +38,6 @@ function normalizeStoredPhone(phone) {
   return digits || null;
 }
 
-// Extrai telefone real apenas se a parte antes do @ for numérica
 function normalizePhone(jid) {
   if (!jid || typeof jid !== 'string') return null;
 
@@ -46,10 +45,10 @@ function normalizePhone(jid) {
   const digits = onlyDigits(raw);
 
   if (!digits) return null;
+
   return '+' + digits;
 }
 
-// Aceita pessoa individual; ignora grupo/broadcast
 function isPersonJid(jid) {
   if (!jid || typeof jid !== 'string') return false;
   if (jid.endsWith('@g.us')) return false;
@@ -59,7 +58,6 @@ function isPersonJid(jid) {
   return false;
 }
 
-// Tenta encontrar número real em vários pontos da mensagem
 function getRealPhone(msg) {
   if (!msg || !msg.key) return null;
 
@@ -67,10 +65,11 @@ function getRealPhone(msg) {
     msg.key.remoteJid,
     msg.key.participant,
     msg.participant,
-    msg.verifiedBizAccount,
     msg.sender,
     msg.senderPn,
-    msg.participantPn
+    msg.participantPn,
+    msg.pushName,
+    msg.verifiedBizAccount
   ];
 
   for (const candidate of candidates) {
@@ -79,6 +78,32 @@ function getRealPhone(msg) {
   }
 
   return null;
+}
+
+function safeStringify(obj) {
+  try {
+    return JSON.stringify(obj, null, 2);
+  } catch (e) {
+    return '[erro ao serializar payload]';
+  }
+}
+
+function logLidPayload(msg) {
+  try {
+    console.log('================ LID PAYLOAD START ================');
+    console.log('remoteJid:', msg?.key?.remoteJid || null);
+    console.log('participant:', msg?.key?.participant || msg?.participant || null);
+    console.log('pushName:', msg?.pushName || null);
+    console.log('sender:', msg?.sender || null);
+    console.log('senderPn:', msg?.senderPn || null);
+    console.log('participantPn:', msg?.participantPn || null);
+    console.log('verifiedBizAccount:', msg?.verifiedBizAccount || null);
+    console.log('mensagem completa:');
+    console.log(safeStringify(msg));
+    console.log('================= LID PAYLOAD END =================');
+  } catch (e) {
+    console.log('Erro ao logar payload LID:', e.message);
+  }
 }
 
 function getStatus() {
@@ -320,7 +345,13 @@ async function startWhatsApp(onQR, onConnected, onDisconnected, onNewContact) {
         if (!isPersonJid(jid)) continue;
         if (msg.key.fromMe) continue;
 
+        const isLid = typeof jid === 'string' && jid.endsWith('@lid');
         const phone = getRealPhone(msg);
+
+        if (isLid) {
+          console.log('⚠️ Mensagem recebida com @lid');
+          logLidPayload(msg);
+        }
 
         if (!phone) {
           console.log('⚠️ Não foi possível extrair número real de:', jid);
