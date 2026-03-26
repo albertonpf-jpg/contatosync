@@ -18,80 +18,143 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const config = {
-    google: {
-        clientId: process.env.GOOGLE_CLIENT_ID || '',
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-        redirectUri: process.env.GOOGLE_REDIRECT_URI || 'https://web-production-a17bb.up.railway.app/auth/google/callback'
-    },
-    whatsapp: { sessionPath: './whatsapp_session' },
-    dataFile: './data/contatosync.json'
-};
+// =============================================
+// SUPABASE — persistencia permanente
+// =============================================
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 
-// =============================================
-// PERSISTENCIA EM DISCO
-// =============================================
-function ensureDataDir() {
-    const dir = path.dirname(config.dataFile);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+async function dbGet(table, filters) {
+    let url = SUPABASE_URL + '/rest/v1/' + table + '?select=*';
+    if (filters) {
+        Object.entries(filters).forEach(([k, v]) => { url += '&' + k + '=eq.' + encodeURIComponent(v); });
+    }
+    const r = await axios.get(url, { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } });
+    return r.data;
 }
 
-function loadPersistedData() {
-    try {
-        ensureDataDir();
-        if (fs.existsSync(config.dataFile)) {
-            const raw = fs.readFileSync(config.dataFile, 'utf8');
-            return JSON.parse(raw);
+async function dbUpsert(table, data) {
+    await axios.post(SUPABASE_URL + '/rest/v1/' + table, data, {
+        headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: 'Bearer ' + SUPABASE_KEY,
+            'Content-Type': 'application/json',
+            Prefer: 'resolution=merge-duplicates'
         }
-    } catch (e) {
-        console.error('Erro ao carregar dados persistidos:', e.message);
-    }
-    return null;
+    });
 }
 
-function savePersistedData() {
+async function dbInsert(table, data) {
+    await axios.post(SUPABASE_URL + '/rest/v1/' + table, data, {
+        headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: 'Bearer ' + SUPABASE_KEY,
+            'Content-Type': 'application/json',
+            Prefer: 'return=representation'
+        }
+    });
+}
+
+async function loadFromSupabase() {
     try {
-        ensureDataDir();
-        const data = {
-            sequencer: appState.sequencer,
-            contacts: appState.contacts,
-            googleTokens: appState.google.accessToken ? {
-                accessToken: appState.google.accessToken,
-                refreshToken: appState.google.refreshToken
-            } : null,
-            savedAt: new Date().toISOString()
+        const [contacts, configRows] = await Promise.all([
+            dbGet('contacts'),
+            dbGet('config')
+        ]);
+        const sequencerRow = configRows.find(r => r.key === 'sequencer');
+        const googleRow = configRows.find(r => r.key === 'google_tokens');
+        return {
+            contacts: contacts || [],
+            sequencer: sequencerRow ? sequencerRow.value : { prefix: 'Contato Zap', current: 1 },
+            googleTokens: googleRow ? googleRow.value : null
         };
-        fs.writeFileSync(config.dataFile, JSON.stringify(data, null, 2));
     } catch (e) {
-        console.error('Erro ao salvar dados:', e.message);
+        console.error('Erro ao carregar do Supabase:', e.message);
+        return { contacts: [], sequencer: { prefix: 'Contato Zap', current: 1 }, googleTokens: null };
     }
 }
 
-// Salva a cada 30 segundos automaticamente
-setInterval(savePersistedData, 30000);
+async function saveSequencer() {
+    try {
+        await dbUpsert('config', { key: 'sequencer', value: appState.sequencer, updated_at: new Date().toISOString() });
+    } catch (e) { console.error('Erro ao salvar sequencer:', e.message); }
+}
+
+async function saveGoogleTokens(tokens) {
+    try {
+        await dbUpsert('config', { key: 'google_tokens', value: tokens, updated_at: new Date().toISOString() });
+    } catch (e) { console.error('Erro ao salvar tokens Google:', e.message); }
+}
+
+async function saveContact(contact) {
+    try {
+        await dbUpsert('contacts', {
+            id: contact.id,
+            phone: contact.phone,
+            name: contact.name || null,
+            push_name: contact.pushName || null,
+            pending: contact.pending || false,
+            has_real_phone: contact.hasRealPhone || true,
+            saved_to_agenda: contact.savedToAgenda || false,
+            erro_agenda: contact.erroAgenda || null,
+            source: contact.source || 'whatsapp',
+            detected_at: contact.detected || new Date().toISOString(),
+            saved_at: contact.savedAt || new Date().toISOString()
+        });
+    } catch (e) { console.error('Erro ao salvar contato:', e.message); }
+}
 
 // =============================================
 // ESTADO DA APLICACAO
 // =============================================
-const persisted = loadPersistedData();
-
 let appState = {
-    whatsapp: { connected: false, qr: null, phone: null, lastActivity: null, autoSave: true, socket: null },
+    whatsapp: { connected: false, qr: null, phone: null, lastActivity: null, autoSave: true, socket: null, chatsCache: [] },
     google: { connected: false, accessToken: null, refreshToken: null, profile: null, oauth2Client: null },
     icloud: { connected: false, appleId: null, lastSync: null },
-    sequencer: persisted?.sequencer || { prefix: 'Contato Zap', current: 1 },
-    contacts: persisted?.contacts || [],
+    sequencer: { prefix: 'Contato Zap', current: 1 },
+    contacts: [],
     logs: [],
-    stats: {
-        total: persisted?.contacts?.length || 0,
-        pending: persisted?.contacts?.filter(c => c.pending)?.length || 0,
-        savedToday: 0
-    },
-    sync: { running: false, progress: 0, total: 0, saved: 0, skipped: 0, errors: 0, lastRun: null }
+    stats: { total: 0, pending: 0, savedToday: 0 },
+    sync: { running: false, progress: 0, total: 0, saved: 0, skipped: 0, errors: 0, lastRun: null },
+    loaded: false
 };
 
 let sseClients = [];
 let baileysModule = null;
+
+// Carregar dados do Supabase ao iniciar
+async function initData() {
+    try {
+        console.log('📦 Carregando dados do Supabase...');
+        const data = await loadFromSupabase();
+        appState.contacts = data.contacts.map(c => ({
+            id: c.id,
+            phone: c.phone,
+            name: c.name,
+            pushName: c.push_name,
+            pending: c.pending,
+            hasRealPhone: c.has_real_phone,
+            savedToAgenda: c.saved_to_agenda,
+            erroAgenda: c.erro_agenda,
+            source: c.source,
+            detected: c.detected_at,
+            savedAt: c.saved_at
+        }));
+        appState.sequencer = data.sequencer;
+        appState.stats.total = appState.contacts.length;
+        appState.stats.pending = appState.contacts.filter(c => c.pending).length;
+        appState.loaded = true;
+        console.log('✅ Dados carregados: ' + appState.contacts.length + ' contatos, sequencer atual: ' + appState.sequencer.current);
+
+        // Restaurar tokens Google se existirem
+        if (data.googleTokens) {
+            restoreGoogleTokens(data.googleTokens);
+        }
+    } catch (e) {
+        console.error('Erro ao iniciar dados:', e.message);
+        appState.loaded = true;
+    }
+}
 
 function makeSilentLogger() {
     const noop = () => {};
@@ -106,13 +169,13 @@ async function loadBaileys() {
 
 function log(message, type = 'info') {
     const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] [${type.toUpperCase()}] ${message}`);
+    console.log('[' + timestamp + '] [' + type.toUpperCase() + '] ' + message);
     appState.logs.unshift({ timestamp, message, type });
     if (appState.logs.length > 100) appState.logs.pop();
 }
 
 function broadcast(event, data) {
-    const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    const message = 'event: ' + event + '\ndata: ' + JSON.stringify(data) + '\n\n';
     sseClients.forEach(client => { try { client.write(message); } catch (e) {} });
 }
 
@@ -143,14 +206,18 @@ function buildContactName(pushName) {
 }
 
 // =============================================
-// GOOGLE OAUTH - com persistencia de tokens
+// GOOGLE
 // =============================================
 function initGoogleOAuth() {
-    const oauth2Client = new google.auth.OAuth2(config.google.clientId, config.google.clientSecret, config.google.redirectUri);
+    const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID || '',
+        process.env.GOOGLE_CLIENT_SECRET || '',
+        process.env.GOOGLE_REDIRECT_URI || 'https://web-production-a17bb.up.railway.app/auth/google/callback'
+    );
     appState.google.oauth2Client = oauth2Client;
     return oauth2Client.generateAuthUrl({
         access_type: 'offline',
-        prompt: 'consent', // IMPORTANTE: forca retornar refresh_token sempre
+        prompt: 'consent',
         scope: [
             'https://www.googleapis.com/auth/contacts',
             'https://www.googleapis.com/auth/userinfo.profile',
@@ -165,8 +232,10 @@ async function handleGoogleCallback(code) {
     appState.google.accessToken = tokens.access_token;
     appState.google.refreshToken = tokens.refresh_token;
 
-    // Salvar tokens no disco imediatamente
-    savePersistedData();
+    await saveGoogleTokens({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token
+    });
 
     const oauth2 = google.oauth2('v2');
     const userInfo = await oauth2.userinfo.get({ auth: appState.google.oauth2Client });
@@ -177,27 +246,29 @@ async function handleGoogleCallback(code) {
     return { ok: true, profile: appState.google.profile };
 }
 
-function restoreGoogleTokens() {
-    if (!persisted?.googleTokens) return;
+function restoreGoogleTokens(tokens) {
     try {
-        const oauth2Client = new google.auth.OAuth2(config.google.clientId, config.google.clientSecret, config.google.redirectUri);
+        const oauth2Client = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID || '',
+            process.env.GOOGLE_CLIENT_SECRET || '',
+            process.env.GOOGLE_REDIRECT_URI || 'https://web-production-a17bb.up.railway.app/auth/google/callback'
+        );
         oauth2Client.setCredentials({
-            access_token: persisted.googleTokens.accessToken,
-            refresh_token: persisted.googleTokens.refreshToken
+            access_token: tokens.accessToken,
+            refresh_token: tokens.refreshToken
         });
-        // Quando o access token expirar, o oauth2Client usa o refresh token automaticamente
-        oauth2Client.on('tokens', (tokens) => {
-            if (tokens.access_token) {
-                appState.google.accessToken = tokens.access_token;
-                savePersistedData();
-                debugLog('Google token renovado automaticamente');
+        oauth2Client.on('tokens', async (newTokens) => {
+            if (newTokens.access_token) {
+                appState.google.accessToken = newTokens.access_token;
+                await saveGoogleTokens({ accessToken: newTokens.access_token, refreshToken: tokens.refreshToken });
+                debugLog('Token Google renovado automaticamente');
             }
         });
         appState.google.oauth2Client = oauth2Client;
-        appState.google.accessToken = persisted.googleTokens.accessToken;
-        appState.google.refreshToken = persisted.googleTokens.refreshToken;
+        appState.google.accessToken = tokens.accessToken;
+        appState.google.refreshToken = tokens.refreshToken;
         appState.google.connected = true;
-        debugLog('Tokens Google restaurados do disco');
+        debugLog('Tokens Google restaurados do Supabase');
     } catch (e) {
         debugLog('Erro ao restaurar tokens Google: ' + e.message);
     }
@@ -212,7 +283,6 @@ async function saveContactToGoogle(phone, name) {
             phoneNumbers: [{ value: phone, type: 'mobile' }]
         }
     });
-    debugLog('Salvo no Google Contacts: ' + name + ' (' + phone + ')');
     return true;
 }
 
@@ -226,9 +296,32 @@ async function isPhoneInGoogle(phone) {
             pageSize: 1
         });
         return (res.data.results || []).length > 0;
-    } catch (e) {
-        return false;
+    } catch (e) { return false; }
+}
+
+// =============================================
+// ICLOUD
+// =============================================
+async function connectICloud(appleId, appPassword) {
+    const response = await axios({
+        method: 'PROPFIND',
+        url: 'https://contacts.icloud.com/',
+        auth: { username: appleId, password: appPassword },
+        headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Depth': '0' },
+        data: '<?xml version="1.0" encoding="utf-8"?><D:propfind xmlns:D="DAV:"><D:prop><D:displayname/></D:prop></D:propfind>',
+        timeout: 15000,
+        validateStatus: (s) => s < 500
+    });
+    if (response.status === 401) throw new Error('Credenciais inválidas. Verifique seu Apple ID e a App-Specific Password.');
+    if (response.status === 207 || response.status === 200) {
+        appState.icloud.connected = true;
+        appState.icloud.appleId = appleId;
+        appState.icloud.lastSync = new Date().toISOString();
+        log('iCloud conectado: ' + appleId);
+        broadcast('agenda-update', { icloud: true });
+        return { ok: true, message: 'iCloud conectado com sucesso' };
     }
+    throw new Error('Resposta inesperada do iCloud: ' + response.status);
 }
 
 // =============================================
@@ -247,43 +340,21 @@ async function syncHistory() {
     broadcast('sync-update', { ...appState.sync, status: 'iniciando' });
 
     try {
-        const sock = appState.whatsapp.socket;
-
-        // Estrategia: usar chats do store interno do Baileys
-        // O Baileys popula o store via evento 'chats.set' na conexao
-        let chats = [];
-
-        // Tentar todas as formas possiveis de acessar os chats
-        try {
-            if (sock.store) {
-                const s = sock.store;
-                if (s.chats && typeof s.chats.all === 'function') chats = s.chats.all();
-                else if (s.chats && s.chats.array) chats = s.chats.array;
-                else if (s.chats) chats = Array.from(Object.values(s.chats));
-            }
-        } catch (e) { debugLog('store err: ' + e.message); }
-
-        // Fallback: usar o chatsSaved que populamos via evento chats.set
-        if (chats.length === 0 && appState.whatsapp.chatsCache) {
-            chats = appState.whatsapp.chatsCache;
-            debugLog('Usando cache de chats: ' + chats.length);
-        }
-
-        debugLog('Chats encontrados para sync: ' + chats.length);
+        let chats = appState.whatsapp.chatsCache || [];
+        debugLog('Chats para sync: ' + chats.length);
 
         const individualChats = chats.filter(c => {
             const id = c.id || c.jid || '';
             return !id.endsWith('@g.us') && !id.endsWith('@broadcast') && id.includes('@');
         });
 
-        debugLog('Chats individuais: ' + individualChats.length);
         appState.sync.total = individualChats.length;
         broadcast('sync-update', { ...appState.sync, status: 'processando', total: individualChats.length });
 
         if (individualChats.length === 0) {
             appState.sync.running = false;
             broadcast('sync-update', { ...appState.sync, status: 'concluido' });
-            return { ok: true, saved: 0, skipped: 0, errors: 0, total: 0, message: 'Nenhum chat encontrado. O WhatsApp pode precisar de alguns minutos para carregar o histórico após a conexão.' };
+            return { ok: true, saved: 0, skipped: 0, errors: 0, total: 0, message: 'Nenhum chat encontrado. Aguarde alguns minutos após conectar o WhatsApp e tente novamente.' };
         }
 
         const BATCH_SIZE = 5;
@@ -291,7 +362,6 @@ async function syncHistory() {
 
         for (let i = 0; i < individualChats.length; i += BATCH_SIZE) {
             const batch = individualChats.slice(i, i + BATCH_SIZE);
-
             for (const chat of batch) {
                 const jid = chat.id || chat.jid || '';
                 const phone = jidToPhone(jid);
@@ -303,18 +373,15 @@ async function syncHistory() {
                 const jaNoGoogle = await isPhoneInGoogle(phone);
                 if (jaNoGoogle) {
                     appState.sync.skipped++;
-                    appState.contacts.push({
-                        phone, name: chat.name || phone, pending: false,
-                        hasRealPhone: true, savedToAgenda: true,
-                        detected: new Date().toISOString(), savedAt: new Date().toISOString(),
-                        id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-                        source: 'sync-existing'
-                    });
+                    const c = { id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6), phone, name: chat.name || phone, pushName: chat.name || null, pending: false, hasRealPhone: true, savedToAgenda: true, erroAgenda: null, detected: new Date().toISOString(), savedAt: new Date().toISOString(), source: 'sync-existing' };
+                    appState.contacts.push(c);
+                    await saveContact(c);
                     continue;
                 }
 
                 const name = buildContactName(chat.name || null);
                 appState.sequencer.current++;
+                await saveSequencer();
 
                 let savedAgenda = false;
                 let erroAgenda = null;
@@ -323,15 +390,9 @@ async function syncHistory() {
                     catch (e) { erroAgenda = e.message; appState.sync.errors++; }
                 }
 
-                const contact = {
-                    phone, name, pending: false, hasRealPhone: true,
-                    savedToAgenda: savedAgenda, erroAgenda: erroAgenda || null,
-                    detected: new Date().toISOString(), savedAt: new Date().toISOString(),
-                    id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-                    source: 'sync'
-                };
-
+                const contact = { id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6), phone, name, pushName: chat.name || null, pending: false, hasRealPhone: true, savedToAgenda: savedAgenda, erroAgenda: erroAgenda || null, detected: new Date().toISOString(), savedAt: new Date().toISOString(), source: 'sync' };
                 appState.contacts.push(contact);
+                await saveContact(contact);
                 appState.stats.total++;
                 appState.stats.savedToday++;
                 if (savedAgenda) appState.sync.saved++;
@@ -343,12 +404,10 @@ async function syncHistory() {
             if (i + BATCH_SIZE < individualChats.length) await delay(BATCH_DELAY);
         }
 
-        savePersistedData();
         appState.sync.running = false;
         appState.sync.lastRun = new Date().toISOString();
         broadcast('sync-update', { ...appState.sync, status: 'concluido' });
         return { ok: true, saved: appState.sync.saved, skipped: appState.sync.skipped, errors: appState.sync.errors, total: appState.sync.total };
-
     } catch (e) {
         appState.sync.running = false;
         broadcast('sync-update', { ...appState.sync, status: 'erro', message: e.message });
@@ -359,16 +418,14 @@ async function syncHistory() {
 // =============================================
 // WHATSAPP
 // =============================================
-const CLEAR_WHATSAPP_SESSION_ON_START = false; // NAO limpar sessao ao iniciar
-let sessionClearedOnce = false;
-
 async function initWhatsApp() {
     try {
         const { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = await loadBaileys();
 
-        if (!fs.existsSync(config.whatsapp.sessionPath)) fs.mkdirSync(config.whatsapp.sessionPath, { recursive: true });
+        const sessionPath = './whatsapp_session';
+        if (!fs.existsSync(sessionPath)) fs.mkdirSync(sessionPath, { recursive: true });
 
-        const { state, saveCreds } = await useMultiFileAuthState(config.whatsapp.sessionPath);
+        const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
         const { version } = await fetchLatestBaileysVersion();
 
         const sock = makeWASocket({
@@ -411,19 +468,16 @@ async function initWhatsApp() {
 
         sock.ev.on('creds.update', saveCreds);
 
-        // Capturar chats ao conectar — popula o cache para o sync historico
         sock.ev.on('chats.set', ({ chats }) => {
-            debugLog('chats.set recebido: ' + chats.length + ' chats');
+            debugLog('chats.set: ' + chats.length + ' chats');
             appState.whatsapp.chatsCache = chats || [];
         });
 
         sock.ev.on('chats.upsert', (chats) => {
-            if (!appState.whatsapp.chatsCache) appState.whatsapp.chatsCache = [];
             chats.forEach(c => {
-                const exists = appState.whatsapp.chatsCache.find(x => x.id === c.id);
-                if (!exists) appState.whatsapp.chatsCache.push(c);
+                if (!appState.whatsapp.chatsCache.find(x => x.id === c.id))
+                    appState.whatsapp.chatsCache.push(c);
             });
-            debugLog('chats.upsert: total cache = ' + appState.whatsapp.chatsCache.length);
         });
 
         sock.ev.on('messages.upsert', async ({ messages }) => {
@@ -436,13 +490,14 @@ async function initWhatsApp() {
                 if (msg.key.senderPn) { phone = jidToPhone(msg.key.senderPn); }
                 if (!phone) { phone = jidToPhone(jid); }
                 if (!phone && msg.key.senderLid) { phone = jidToPhone(msg.key.senderLid); }
-                if (!phone) { debugLog('Nao foi possivel extrair numero de: ' + jid); continue; }
+                if (!phone) { debugLog('Não foi possível extrair número de: ' + jid); continue; }
 
                 const jaExiste = appState.contacts.find(c => c.phone === phone);
-                if (jaExiste) { debugLog('Contato ja existe: ' + phone); continue; }
+                if (jaExiste) { debugLog('Contato já existe: ' + phone); continue; }
 
                 const name = buildContactName(msg.pushName);
                 appState.sequencer.current++;
+                await saveSequencer();
 
                 let savedAgenda = false;
                 let erroAgenda = null;
@@ -452,18 +507,18 @@ async function initWhatsApp() {
                 }
 
                 const contact = {
+                    id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
                     phone, name, pushName: msg.pushName || null,
                     pending: false, hasRealPhone: true,
                     savedToAgenda: savedAgenda, erroAgenda: erroAgenda || null,
                     detected: new Date().toISOString(), savedAt: new Date().toISOString(),
-                    id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
                     source: 'whatsapp'
                 };
 
                 appState.contacts.push(contact);
+                await saveContact(contact); // salvar no Supabase
                 appState.stats.total++;
                 appState.stats.savedToday++;
-                savePersistedData(); // salvar no disco imediatamente
                 log('Novo contato: ' + name + ' (' + phone + ')' + (savedAgenda ? ' ✅' : ' ⚠️'));
                 broadcast('contact', contact);
             }
@@ -476,34 +531,12 @@ async function initWhatsApp() {
     }
 }
 
-async function connectICloud(appleId, appPassword) {
-    const response = await axios({
-        method: 'PROPFIND',
-        url: 'https://contacts.icloud.com/',
-        auth: { username: appleId, password: appPassword },
-        headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Depth': '0' },
-        data: '<?xml version="1.0" encoding="utf-8"?><D:propfind xmlns:D="DAV:"><D:prop><D:displayname/></D:prop></D:propfind>',
-        timeout: 15000,
-        validateStatus: (s) => s < 500
-    });
-    if (response.status === 401) throw new Error('Credenciais inválidas. Verifique seu Apple ID e a App-Specific Password.');
-    if (response.status === 207 || response.status === 200) {
-        appState.icloud.connected = true;
-        appState.icloud.appleId = appleId;
-        appState.icloud.lastSync = new Date().toISOString();
-        log('iCloud conectado: ' + appleId);
-        broadcast('agenda-update', { icloud: true });
-        return { ok: true, message: 'iCloud conectado com sucesso' };
-    }
-    throw new Error('Resposta inesperada do iCloud: ' + response.status);
-}
-
 // =============================================
 // ROTAS
 // =============================================
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-app.get('/health', (req, res) => { res.json({ status: 'ok', uptime: process.uptime(), mode: 'PRODUCTION' }); });
+app.get('/health', (req, res) => { res.json({ status: 'ok', uptime: process.uptime(), mode: 'PRODUCTION', supabase: !!SUPABASE_URL }); });
 app.get('/debug/logs', (req, res) => { res.json({ logs: debugLogs, chatsCache: appState.whatsapp.chatsCache?.length || 0 }); });
 
 app.get('/whatsapp/status', (req, res) => {
@@ -541,7 +574,8 @@ app.post('/whatsapp/disconnect', (req, res) => {
         appState.whatsapp.qr = null;
         appState.whatsapp.phone = null;
         appState.whatsapp.socket = null;
-        if (fs.existsSync(config.whatsapp.sessionPath)) fs.rmSync(config.whatsapp.sessionPath, { recursive: true, force: true });
+        const sessionPath = './whatsapp_session';
+        if (fs.existsSync(sessionPath)) fs.rmSync(sessionPath, { recursive: true, force: true });
         broadcast('disconnected', { status: 'disconnected' });
         res.json({ ok: true });
     } catch (e) { res.json({ ok: true }); }
@@ -564,13 +598,13 @@ app.get('/auth/google/callback', async (req, res) => {
     } catch (e) { res.send('<h2>Erro</h2><p>' + e.message + '</p>'); }
 });
 
-app.post('/auth/google/disconnect', (req, res) => {
+app.post('/auth/google/disconnect', async (req, res) => {
     appState.google.connected = false;
     appState.google.profile = null;
     appState.google.accessToken = null;
     appState.google.refreshToken = null;
     appState.google.oauth2Client = null;
-    savePersistedData();
+    await dbUpsert('config', { key: 'google_tokens', value: null, updated_at: new Date().toISOString() }).catch(() => {});
     broadcast('agenda-update', { google: false });
     res.json({ ok: true });
 });
@@ -598,11 +632,11 @@ app.post('/auth/icloud/disconnect', (req, res) => {
 
 app.get('/sequencer', (req, res) => res.json(appState.sequencer));
 
-app.put('/sequencer', (req, res) => {
+app.put('/sequencer', async (req, res) => {
     const { prefix, current } = req.body;
     if (prefix) appState.sequencer.prefix = prefix;
     if (current && !isNaN(current)) appState.sequencer.current = parseInt(current);
-    savePersistedData();
+    await saveSequencer();
     res.json(appState.sequencer);
 });
 
@@ -620,9 +654,10 @@ app.post('/contacts/save', async (req, res) => {
     contact.savedAt = new Date().toISOString();
     contact.source = 'manual';
     appState.sequencer.current++;
+    await saveSequencer();
+    await saveContact(contact);
     appState.stats.pending--;
     appState.stats.savedToday++;
-    savePersistedData();
     res.json({ ok: true, contact });
 });
 
@@ -640,22 +675,13 @@ app.post('/contacts/save-all', async (req, res) => {
         c.savedAt = new Date().toISOString();
         c.source = 'bulk';
         appState.sequencer.current++;
+        await saveContact(c);
         saved++;
     }
+    await saveSequencer();
     appState.stats.pending = 0;
     appState.stats.savedToday += saved;
-    savePersistedData();
     res.json({ ok: true, saved, message: saved + ' contatos salvos' });
-});
-
-// Rota para limpar contatos (util para testes)
-app.post('/contacts/clear', (req, res) => {
-    appState.contacts = [];
-    appState.stats.total = 0;
-    appState.stats.pending = 0;
-    appState.stats.savedToday = 0;
-    savePersistedData();
-    res.json({ ok: true });
 });
 
 app.get('/events', (req, res) => {
@@ -693,17 +719,11 @@ app.use((err, req, res, next) => {
 app.get('*', (req, res) => res.status(404).send('Not found'));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     log('🚀 ContatoSync iniciado na porta ' + PORT);
-    // Restaurar tokens do Google do disco
-    restoreGoogleTokens();
-    if (appState.google.connected) {
-        log('✅ Google Contacts restaurado do disco');
-        broadcast('agenda-update', { google: true });
-    }
-    // Iniciar WhatsApp
+    await initData(); // carregar dados do Supabase
     initWhatsApp().catch(e => log('Erro ao iniciar WhatsApp: ' + e.message, 'error'));
 });
 
-process.on('SIGTERM', () => { savePersistedData(); log('Encerrando...'); process.exit(0); });
-process.on('SIGINT', () => { savePersistedData(); log('Encerrando...'); process.exit(0); });
+process.on('SIGTERM', () => { log('Encerrando...'); process.exit(0); });
+process.on('SIGINT', () => { log('Encerrando...'); process.exit(0); });
