@@ -19,7 +19,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // =============================================
-// SUPABASE — persistencia permanente
+// SUPABASE
 // =============================================
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
@@ -44,23 +44,9 @@ async function dbUpsert(table, data) {
     });
 }
 
-async function dbInsert(table, data) {
-    await axios.post(SUPABASE_URL + '/rest/v1/' + table, data, {
-        headers: {
-            apikey: SUPABASE_KEY,
-            Authorization: 'Bearer ' + SUPABASE_KEY,
-            'Content-Type': 'application/json',
-            Prefer: 'return=representation'
-        }
-    });
-}
-
 async function loadFromSupabase() {
     try {
-        const [contacts, configRows] = await Promise.all([
-            dbGet('contacts'),
-            dbGet('config')
-        ]);
+        const [contacts, configRows] = await Promise.all([dbGet('contacts'), dbGet('config')]);
         const sequencerRow = configRows.find(r => r.key === 'sequencer');
         const googleRow = configRows.find(r => r.key === 'google_tokens');
         return {
@@ -75,15 +61,13 @@ async function loadFromSupabase() {
 }
 
 async function saveSequencer() {
-    try {
-        await dbUpsert('config', { key: 'sequencer', value: appState.sequencer, updated_at: new Date().toISOString() });
-    } catch (e) { console.error('Erro ao salvar sequencer:', e.message); }
+    try { await dbUpsert('config', { key: 'sequencer', value: appState.sequencer, updated_at: new Date().toISOString() }); }
+    catch (e) { console.error('Erro ao salvar sequencer:', e.message); }
 }
 
 async function saveGoogleTokens(tokens) {
-    try {
-        await dbUpsert('config', { key: 'google_tokens', value: tokens, updated_at: new Date().toISOString() });
-    } catch (e) { console.error('Erro ao salvar tokens Google:', e.message); }
+    try { await dbUpsert('config', { key: 'google_tokens', value: tokens, updated_at: new Date().toISOString() }); }
+    catch (e) { console.error('Erro ao salvar tokens Google:', e.message); }
 }
 
 async function saveContact(contact) {
@@ -105,15 +89,14 @@ async function saveContact(contact) {
 }
 
 // =============================================
-// ESTADO DA APLICACAO
+// ESTADO
 // =============================================
 let appState = {
     whatsapp: { connected: false, qr: null, phone: null, lastActivity: null, autoSave: true, socket: null, chatsCache: [] },
     google: { connected: false, accessToken: null, refreshToken: null, profile: null, oauth2Client: null },
-    icloud: { connected: false, appleId: null, lastSync: null },
+    icloud: { connected: false, appleId: null, appPassword: null, addressBookUrl: null, lastSync: null },
     sequencer: { prefix: 'Contato Zap', current: 1 },
-    contacts: [],
-    logs: [],
+    contacts: [], logs: [],
     stats: { total: 0, pending: 0, savedToday: 0 },
     sync: { running: false, progress: 0, total: 0, saved: 0, skipped: 0, errors: 0, lastRun: null },
     loaded: false
@@ -122,34 +105,22 @@ let appState = {
 let sseClients = [];
 let baileysModule = null;
 
-// Carregar dados do Supabase ao iniciar
 async function initData() {
     try {
         console.log('📦 Carregando dados do Supabase...');
         const data = await loadFromSupabase();
         appState.contacts = data.contacts.map(c => ({
-            id: c.id,
-            phone: c.phone,
-            name: c.name,
-            pushName: c.push_name,
-            pending: c.pending,
-            hasRealPhone: c.has_real_phone,
-            savedToAgenda: c.saved_to_agenda,
-            erroAgenda: c.erro_agenda,
-            source: c.source,
-            detected: c.detected_at,
-            savedAt: c.saved_at
+            id: c.id, phone: c.phone, name: c.name, pushName: c.push_name,
+            pending: c.pending, hasRealPhone: c.has_real_phone,
+            savedToAgenda: c.saved_to_agenda, erroAgenda: c.erro_agenda,
+            source: c.source, detected: c.detected_at, savedAt: c.saved_at
         }));
         appState.sequencer = data.sequencer;
         appState.stats.total = appState.contacts.length;
         appState.stats.pending = appState.contacts.filter(c => c.pending).length;
         appState.loaded = true;
-        console.log('✅ Dados carregados: ' + appState.contacts.length + ' contatos, sequencer atual: ' + appState.sequencer.current);
-
-        // Restaurar tokens Google se existirem
-        if (data.googleTokens) {
-            restoreGoogleTokens(data.googleTokens);
-        }
+        console.log('✅ Dados carregados: ' + appState.contacts.length + ' contatos, sequencer: ' + appState.sequencer.current);
+        if (data.googleTokens) restoreGoogleTokens(data.googleTokens);
     } catch (e) {
         console.error('Erro ao iniciar dados:', e.message);
         appState.loaded = true;
@@ -199,8 +170,7 @@ const delay = (ms) => new Promise(res => setTimeout(res, ms));
 function buildContactName(pushName) {
     const base = appState.sequencer.prefix + ' ' + appState.sequencer.current;
     if (pushName && pushName.trim()) {
-        const firstName = pushName.trim().split(' ')[0];
-        return base + ' - ' + firstName;
+        return base + ' - ' + pushName.trim().split(' ')[0];
     }
     return base;
 }
@@ -216,13 +186,8 @@ function initGoogleOAuth() {
     );
     appState.google.oauth2Client = oauth2Client;
     return oauth2Client.generateAuthUrl({
-        access_type: 'offline',
-        prompt: 'consent',
-        scope: [
-            'https://www.googleapis.com/auth/contacts',
-            'https://www.googleapis.com/auth/userinfo.profile',
-            'https://www.googleapis.com/auth/userinfo.email'
-        ]
+        access_type: 'offline', prompt: 'consent',
+        scope: ['https://www.googleapis.com/auth/contacts', 'https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email']
     });
 }
 
@@ -231,12 +196,7 @@ async function handleGoogleCallback(code) {
     appState.google.oauth2Client.setCredentials(tokens);
     appState.google.accessToken = tokens.access_token;
     appState.google.refreshToken = tokens.refresh_token;
-
-    await saveGoogleTokens({
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token
-    });
-
+    await saveGoogleTokens({ accessToken: tokens.access_token, refreshToken: tokens.refresh_token });
     const oauth2 = google.oauth2('v2');
     const userInfo = await oauth2.userinfo.get({ auth: appState.google.oauth2Client });
     appState.google.profile = { email: userInfo.data.email, name: userInfo.data.name, picture: userInfo.data.picture };
@@ -253,10 +213,7 @@ function restoreGoogleTokens(tokens) {
             process.env.GOOGLE_CLIENT_SECRET || '',
             process.env.GOOGLE_REDIRECT_URI || 'https://web-production-a17bb.up.railway.app/auth/google/callback'
         );
-        oauth2Client.setCredentials({
-            access_token: tokens.accessToken,
-            refresh_token: tokens.refreshToken
-        });
+        oauth2Client.setCredentials({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
         oauth2Client.on('tokens', async (newTokens) => {
             if (newTokens.access_token) {
                 appState.google.accessToken = newTokens.access_token;
@@ -269,19 +226,14 @@ function restoreGoogleTokens(tokens) {
         appState.google.refreshToken = tokens.refreshToken;
         appState.google.connected = true;
         debugLog('Tokens Google restaurados do Supabase');
-    } catch (e) {
-        debugLog('Erro ao restaurar tokens Google: ' + e.message);
-    }
+    } catch (e) { debugLog('Erro ao restaurar tokens Google: ' + e.message); }
 }
 
 async function saveContactToGoogle(phone, name) {
     if (!appState.google.connected || !appState.google.oauth2Client) throw new Error('Google não conectado');
     const peopleApi = google.people({ version: 'v1', auth: appState.google.oauth2Client });
     await peopleApi.people.createContact({
-        requestBody: {
-            names: [{ givenName: name }],
-            phoneNumbers: [{ value: phone, type: 'mobile' }]
-        }
+        requestBody: { names: [{ givenName: name }], phoneNumbers: [{ value: phone, type: 'mobile' }] }
     });
     return true;
 }
@@ -290,19 +242,74 @@ async function isPhoneInGoogle(phone) {
     if (!appState.google.connected || !appState.google.oauth2Client) return false;
     try {
         const peopleApi = google.people({ version: 'v1', auth: appState.google.oauth2Client });
-        const res = await peopleApi.people.searchContacts({
-            query: phone.replace('+', ''),
-            readMask: 'phoneNumbers',
-            pageSize: 1
-        });
+        const res = await peopleApi.people.searchContacts({ query: phone.replace('+', ''), readMask: 'phoneNumbers', pageSize: 1 });
         return (res.data.results || []).length > 0;
     } catch (e) { return false; }
 }
 
 // =============================================
-// ICLOUD
+// ICLOUD CardDAV — salvamento implementado
 // =============================================
+
+// Descobre a URL real do addressbook do iCloud via PROPFIND
+async function discoverICloudAddressBook(appleId, appPassword) {
+    try {
+        // Passo 1: descobrir o principal do usuario
+        const principalResp = await axios({
+            method: 'PROPFIND',
+            url: 'https://contacts.icloud.com/',
+            auth: { username: appleId, password: appPassword },
+            headers: {
+                'Content-Type': 'application/xml; charset=utf-8',
+                'Depth': '0'
+            },
+            data: '<?xml version="1.0" encoding="utf-8"?><D:propfind xmlns:D="DAV:"><D:prop><D:current-user-principal/></D:prop></D:propfind>',
+            timeout: 15000,
+            validateStatus: (s) => s < 500
+        });
+
+        if (principalResp.status === 401) throw new Error('Credenciais inválidas');
+
+        // Extrair href do principal
+        const principalMatch = principalResp.data.match(/<[^>]*href[^>]*>([^<]+)<\/[^>]*href>/i);
+        if (!principalMatch) {
+            // Fallback: tentar URL direta com ID da conta
+            const accountId = appleId.replace('@', '%40');
+            return 'https://contacts.icloud.com/' + accountId + '/carddavhome/card/';
+        }
+
+        let principalHref = principalMatch[1].trim();
+        debugLog('iCloud principal href: ' + principalHref);
+
+        // Passo 2: descobrir o home set do carddav
+        const homeSetResp = await axios({
+            method: 'PROPFIND',
+            url: principalHref.startsWith('http') ? principalHref : 'https://contacts.icloud.com' + principalHref,
+            auth: { username: appleId, password: appPassword },
+            headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Depth': '0' },
+            data: '<?xml version="1.0" encoding="utf-8"?><D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav"><D:prop><C:addressbook-home-set/></D:prop></D:propfind>',
+            timeout: 15000,
+            validateStatus: (s) => s < 500
+        });
+
+        const homeMatch = homeSetResp.data.match(/addressbook-home-set[^>]*>\s*<[^>]*href[^>]*>([^<]+)<\/[^>]*href>/i);
+        if (!homeMatch) throw new Error('Não foi possível descobrir o addressbook home set');
+
+        let homeHref = homeMatch[1].trim();
+        if (!homeHref.startsWith('http')) homeHref = 'https://contacts.icloud.com' + homeHref;
+        debugLog('iCloud addressbook home: ' + homeHref);
+
+        return homeHref;
+    } catch (e) {
+        debugLog('Erro ao descobrir addressbook: ' + e.message);
+        // Fallback seguro
+        const numericId = appleId.split('@')[0];
+        return 'https://contacts.icloud.com/' + numericId + '/carddavhome/card/';
+    }
+}
+
 async function connectICloud(appleId, appPassword) {
+    // Verificar credenciais com PROPFIND simples
     const response = await axios({
         method: 'PROPFIND',
         url: 'https://contacts.icloud.com/',
@@ -312,16 +319,65 @@ async function connectICloud(appleId, appPassword) {
         timeout: 15000,
         validateStatus: (s) => s < 500
     });
+
     if (response.status === 401) throw new Error('Credenciais inválidas. Verifique seu Apple ID e a App-Specific Password.');
-    if (response.status === 207 || response.status === 200) {
-        appState.icloud.connected = true;
-        appState.icloud.appleId = appleId;
-        appState.icloud.lastSync = new Date().toISOString();
-        log('iCloud conectado: ' + appleId);
-        broadcast('agenda-update', { icloud: true });
-        return { ok: true, message: 'iCloud conectado com sucesso' };
+    if (response.status !== 207 && response.status !== 200) throw new Error('Resposta inesperada do iCloud: ' + response.status);
+
+    // Descobrir URL do addressbook
+    debugLog('Descobrindo addressbook do iCloud...');
+    const addressBookUrl = await discoverICloudAddressBook(appleId, appPassword);
+    debugLog('iCloud addressBook URL: ' + addressBookUrl);
+
+    appState.icloud.connected = true;
+    appState.icloud.appleId = appleId;
+    appState.icloud.appPassword = appPassword;
+    appState.icloud.addressBookUrl = addressBookUrl;
+    appState.icloud.lastSync = new Date().toISOString();
+    log('iCloud conectado: ' + appleId);
+    broadcast('agenda-update', { icloud: true });
+    return { ok: true, message: 'iCloud conectado com sucesso' };
+}
+
+// Salva contato no iCloud via CardDAV (PUT com vCard)
+async function saveContactToICloud(phone, name) {
+    if (!appState.icloud.connected || !appState.icloud.appleId || !appState.icloud.appPassword) {
+        throw new Error('iCloud não conectado');
     }
-    throw new Error('Resposta inesperada do iCloud: ' + response.status);
+
+    // Gerar UID único para o contato
+    const uid = 'contatosync-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+
+    // Montar vCard 3.0
+    const firstName = name.split(' - ')[1] || name; // extrair nome real se houver "Contato Zap 1 - Alberto"
+    const vcard = [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        'UID:' + uid,
+        'FN:' + name,
+        'N:' + name + ';;;;',
+        'TEL;TYPE=CELL:' + phone,
+        'END:VCARD'
+    ].join('\r\n');
+
+    const contactUrl = appState.icloud.addressBookUrl + uid + '.vcf';
+
+    debugLog('Salvando no iCloud: ' + name + ' → ' + contactUrl);
+
+    await axios({
+        method: 'PUT',
+        url: contactUrl,
+        auth: { username: appState.icloud.appleId, password: appState.icloud.appPassword },
+        headers: {
+            'Content-Type': 'text/vcard; charset=utf-8',
+            'If-None-Match': '*'  // cria novo, não sobrescreve
+        },
+        data: vcard,
+        timeout: 15000,
+        validateStatus: (s) => s < 500
+    });
+
+    debugLog('Contato salvo no iCloud: ' + name + ' (' + phone + ')');
+    return true;
 }
 
 // =============================================
@@ -341,8 +397,6 @@ async function syncHistory() {
 
     try {
         let chats = appState.whatsapp.chatsCache || [];
-        debugLog('Chats para sync: ' + chats.length);
-
         const individualChats = chats.filter(c => {
             const id = c.id || c.jid || '';
             return !id.endsWith('@g.us') && !id.endsWith('@broadcast') && id.includes('@');
@@ -385,9 +439,18 @@ async function syncHistory() {
 
                 let savedAgenda = false;
                 let erroAgenda = null;
+
                 if (appState.google.connected) {
                     try { await saveContactToGoogle(phone, name); savedAgenda = true; }
-                    catch (e) { erroAgenda = e.message; appState.sync.errors++; }
+                    catch (e) { erroAgenda = 'Google: ' + e.message; appState.sync.errors++; }
+                }
+
+                if (appState.icloud.connected) {
+                    try { await saveContactToICloud(phone, name); savedAgenda = true; }
+                    catch (e) {
+                        erroAgenda = (erroAgenda ? erroAgenda + ' | ' : '') + 'iCloud: ' + e.message;
+                        appState.sync.errors++;
+                    }
                 }
 
                 const contact = { id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6), phone, name, pushName: chat.name || null, pending: false, hasRealPhone: true, savedToAgenda: savedAgenda, erroAgenda: erroAgenda || null, detected: new Date().toISOString(), savedAt: new Date().toISOString(), source: 'sync' };
@@ -421,7 +484,6 @@ async function syncHistory() {
 async function initWhatsApp() {
     try {
         const { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = await loadBaileys();
-
         const sessionPath = './whatsapp_session';
         if (!fs.existsSync(sessionPath)) fs.mkdirSync(sessionPath, { recursive: true });
 
@@ -430,8 +492,7 @@ async function initWhatsApp() {
 
         const sock = makeWASocket({
             version, auth: state, printQRInTerminal: false,
-            logger: makeSilentLogger(),
-            browser: ['ContatoSync', 'Chrome', '120.0.0']
+            logger: makeSilentLogger(), browser: ['ContatoSync', 'Chrome', '120.0.0']
         });
 
         appState.whatsapp.socket = sock;
@@ -449,12 +510,11 @@ async function initWhatsApp() {
             }
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
-                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
                 appState.whatsapp.connected = false;
                 appState.whatsapp.phone = null;
                 appState.whatsapp.qr = null;
                 broadcast('disconnected', { status: 'disconnected', statusCode });
-                if (shouldReconnect) setTimeout(() => initWhatsApp(), 3000);
+                if (statusCode !== DisconnectReason.loggedOut) setTimeout(() => initWhatsApp(), 3000);
                 else log('🚪 Sessão encerrada com logout.');
             } else if (connection === 'open') {
                 appState.whatsapp.connected = true;
@@ -501,9 +561,18 @@ async function initWhatsApp() {
 
                 let savedAgenda = false;
                 let erroAgenda = null;
+
                 if (appState.google.connected) {
                     try { await saveContactToGoogle(phone, name); savedAgenda = true; }
-                    catch (e) { erroAgenda = e.message; debugLog('Erro Google: ' + e.message); }
+                    catch (e) { erroAgenda = 'Google: ' + e.message; debugLog('Erro Google: ' + e.message); }
+                }
+
+                if (appState.icloud.connected) {
+                    try { await saveContactToICloud(phone, name); savedAgenda = true; }
+                    catch (e) {
+                        erroAgenda = (erroAgenda ? erroAgenda + ' | ' : '') + 'iCloud: ' + e.message;
+                        debugLog('Erro iCloud: ' + e.message);
+                    }
                 }
 
                 const contact = {
@@ -516,7 +585,7 @@ async function initWhatsApp() {
                 };
 
                 appState.contacts.push(contact);
-                await saveContact(contact); // salvar no Supabase
+                await saveContact(contact);
                 appState.stats.total++;
                 appState.stats.savedToday++;
                 log('Novo contato: ' + name + ' (' + phone + ')' + (savedAgenda ? ' ✅' : ' ⚠️'));
@@ -626,6 +695,8 @@ app.post('/auth/icloud', async (req, res) => {
 app.post('/auth/icloud/disconnect', (req, res) => {
     appState.icloud.connected = false;
     appState.icloud.appleId = null;
+    appState.icloud.appPassword = null;
+    appState.icloud.addressBookUrl = null;
     broadcast('agenda-update', { icloud: false });
     res.json({ ok: true });
 });
@@ -649,6 +720,9 @@ app.post('/contacts/save', async (req, res) => {
     if (appState.google.connected) {
         try { await saveContactToGoogle(contact.phone, name); } catch (e) { debugLog('Erro Google: ' + e.message); }
     }
+    if (appState.icloud.connected) {
+        try { await saveContactToICloud(contact.phone, name); } catch (e) { debugLog('Erro iCloud: ' + e.message); }
+    }
     contact.name = name;
     contact.pending = false;
     contact.savedAt = new Date().toISOString();
@@ -667,9 +741,8 @@ app.post('/contacts/save-all', async (req, res) => {
     let saved = 0;
     for (const c of pending) {
         const name = buildContactName(c.pushName || null);
-        if (appState.google.connected) {
-            try { await saveContactToGoogle(c.phone, name); } catch (e) {}
-        }
+        if (appState.google.connected) { try { await saveContactToGoogle(c.phone, name); } catch (e) {} }
+        if (appState.icloud.connected) { try { await saveContactToICloud(c.phone, name); } catch (e) {} }
         c.name = name;
         c.pending = false;
         c.savedAt = new Date().toISOString();
@@ -721,7 +794,7 @@ app.get('*', (req, res) => res.status(404).send('Not found'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
     log('🚀 ContatoSync iniciado na porta ' + PORT);
-    await initData(); // carregar dados do Supabase
+    await initData();
     initWhatsApp().catch(e => log('Erro ao iniciar WhatsApp: ' + e.message, 'error'));
 });
 
