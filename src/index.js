@@ -79,6 +79,18 @@ function broadcast(event, data) {
     });
 }
 
+// Mapa LID -> numero real
+const lidToPhone = new Map();
+
+// Buffer de logs de debug
+let debugLogs = [];
+function debugLog(msg) {
+    const entry = '[' + new Date().toISOString() + '] ' + msg;
+    console.log(entry);
+    debugLogs.push(entry);
+    if (debugLogs.length > 200) debugLogs.shift();
+}
+
 async function initWhatsApp() {
     try {
         const {
@@ -116,7 +128,6 @@ async function initWhatsApp() {
 
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
-
             if (qr) {
                 try {
                     const qrCodeUrl = await QRCode.toDataURL(qr);
@@ -127,31 +138,18 @@ async function initWhatsApp() {
                     log(`Erro QR: ${e.message}`, 'error');
                 }
             }
-
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-
-                log('❌ Conexão fechada');
-                log(`📌 Status code: ${statusCode ?? 'undefined'}`);
-                log(`📌 Mensagem do erro: ${lastDisconnect?.error?.message || 'sem mensagem'}`);
-                log(`📌 Nome do erro: ${lastDisconnect?.error?.name || 'sem nome'}`);
                 log(`Conexão fechada. Reconectando: ${shouldReconnect}`);
-
                 appState.whatsapp.connected = false;
                 appState.whatsapp.phone = null;
                 appState.whatsapp.qr = null;
-
-                broadcast('disconnected', {
-                    status: 'disconnected',
-                    statusCode,
-                    message: lastDisconnect?.error?.message || null
-                });
-
+                broadcast('disconnected', { status: 'disconnected', statusCode });
                 if (shouldReconnect) {
                     setTimeout(() => initWhatsApp(), 3000);
                 } else {
-                    log('🚪 Sessão encerrada com logout. Reconexão automática cancelada.');
+                    log('🚪 Sessão encerrada com logout.');
                 }
             } else if (connection === 'open') {
                 appState.whatsapp.connected = true;
@@ -165,32 +163,91 @@ async function initWhatsApp() {
 
         sock.ev.on('creds.update', saveCreds);
 
-        sock.ev.on('contacts.update', (contacts) => {
+        // Mapeia LID -> numero real quando o Baileys sincroniza contatos
+        sock.ev.on('contacts.upsert', (contacts) => {
             contacts.forEach(c => {
-                if (c.id && c.name) addNewContact(c.id.replace('@s.whatsapp.net', ''), c.name);
+                if (!c.id) return;
+                debugLog('contacts.upsert: id=' + c.id + ' notify=' + c.notify + ' name=' + c.name + ' fields=' + Object.keys(c).join(','));
+                if (c.id.endsWith('@lid')) {
+                    if (c.notify && /^\d{7,15}$/.test(c.notify.replace(/\D/g, ''))) {
+                        lidToPhone.set(c.id, '+' + c.notify.replace(/\D/g, ''));
+                        debugLog('LID mapeado: ' + c.id + ' -> ' + c.notify);
+                    }
+                }
+            });
+        });
+
+        sock.ev.on('contacts.update', (updates) => {
+            updates.forEach(c => {
+                if (!c.id) return;
+                debugLog('contacts.update: id=' + c.id + ' data=' + JSON.stringify(c));
+                if (c.id.endsWith('@lid') && c.notify) {
+                    lidToPhone.set(c.id, '+' + c.notify.replace(/\D/g, ''));
+                    debugLog('LID atualizado: ' + c.id + ' -> ' + c.notify);
+                }
             });
         });
 
         sock.ev.on('messages.upsert', ({ messages }) => {
             messages.forEach(msg => {
-                if (msg.key?.remoteJid && !msg.key.fromMe) {
-                    addNewContact(msg.key.remoteJid.replace('@s.whatsapp.net', ''), msg.pushName || null);
+                if (!msg.key?.remoteJid || msg.key.fromMe) return;
+
+                const jid = msg.key.remoteJid;
+                debugLog('MSG de: ' + jid + ' | pushName: ' + (msg.pushName || 'null') + ' | key: ' + JSON.stringify(msg.key));
+
+                // Ignorar grupos
+                if (jid.endsWith('@g.us') || jid.endsWith('@broadcast')) return;
+
+                // Tentar extrair numero real
+                let phone = null;
+
+                // 1) JID com numero real (@s.whatsapp.net)
+                const raw = jid.split('@')[0].split(':')[0];
+                if (/^\d{7,15}$/.test(raw)) {
+                    phone = '+' + raw;
                 }
+
+                // 2) LID - verificar mapa
+                if (!phone && jid.endsWith('@lid')) {
+                    if (lidToPhone.has(jid)) {
+                        phone = lidToPhone.get(jid);
+                        debugLog('LID resolvido do mapa: ' + jid + ' -> ' + phone);
+                    } else {
+                        debugLog('LID nao mapeado ainda: ' + jid + ' | mapa size: ' + lidToPhone.size);
+                    }
+                }
+
+                // 3) pushName como fallback se parecer numero
+                if (!phone && msg.pushName) {
+                    const pn = msg.pushName.replace(/\D/g, '');
+                    if (pn.length >= 10 && pn.length <= 13) {
+                        phone = '+' + pn;
+                        debugLog('Numero extraido do pushName: ' + phone);
+                    }
+                }
+
+                // Usar phone resolvido ou jid como fallback
+                const identifier = phone || jid;
+                debugLog('Identificador final: ' + identifier);
+
+                addNewContact(identifier, msg.pushName || null, !!phone);
             });
         });
 
         return sock;
     } catch (error) {
         log(`Erro ao inicializar WhatsApp: ${error.message}`, 'error');
-        log(`Erro detalhado WhatsApp: ${error.stack || 'sem stack'}`, 'error');
         throw error;
     }
 }
 
-function addNewContact(phoneNumber, name = null) {
+function addNewContact(phoneNumber, name = null, hasRealPhone = false) {
     if (appState.contacts.find(c => c.phone === phoneNumber)) return;
     const contact = {
-        phone: phoneNumber, name, pending: !name,
+        phone: phoneNumber,
+        name,
+        pending: !name,
+        hasRealPhone,
         detected: new Date().toISOString(),
         id: `contact_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
         source: 'whatsapp'
@@ -231,13 +288,28 @@ async function handleGoogleCallback(code) {
     return { ok: true, profile: appState.google.profile };
 }
 
+async function saveContactToGoogle(phone, name) {
+    if (!appState.google.connected || !appState.google.oauth2Client) {
+        throw new Error('Google não conectado');
+    }
+    const peopleApi = google.people({ version: 'v1', auth: appState.google.oauth2Client });
+    await peopleApi.people.createContact({
+        requestBody: {
+            names: [{ givenName: name }],
+            phoneNumbers: [{ value: phone, type: 'mobile' }]
+        }
+    });
+    debugLog('Contato salvo no Google: ' + name + ' (' + phone + ')');
+    return true;
+}
+
 async function connectICloud(appleId, appPassword) {
     const response = await axios({
         method: 'PROPFIND',
         url: `https://contacts.icloud.com/`,
         auth: { username: appleId, password: appPassword },
         headers: { 'Content-Type': 'application/xml', 'Depth': '0' },
-        data: `<?xml version="1.0"?><D:propfind xmlns:D="DAV:"><D:prop><D:displayname/></D:prop></D:propfind>`,
+        data: `<?xml version="1.0"?>`,
         timeout: 10000
     });
     if (response.status === 207 || response.status === 200) {
@@ -255,6 +327,11 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', uptime: process.uptime(), mode: 'PRODUCTION' });
+});
+
+// Rota de debug para ver os logs internos
+app.get('/debug/logs', (req, res) => {
+    res.json({ logs: debugLogs, lidMapSize: lidToPhone.size, lidMap: Object.fromEntries(lidToPhone) });
 });
 
 app.get('/whatsapp/status', (req, res) => {
@@ -309,7 +386,7 @@ app.get('/auth/google', (req, res) => {
     try {
         res.redirect(initGoogleOAuth());
     } catch (e) {
-        res.status(500).send('<html><body><h1>Erro OAuth</h1><button onclick="window.close()">Fechar</button></body></html>');
+        res.status(500).send('<h1>Erro OAuth</h1>');
     }
 });
 
@@ -319,14 +396,9 @@ app.get('/auth/google/callback', async (req, res) => {
         if (error) throw new Error(error);
         if (!code) throw new Error('Código não encontrado');
         const result = await handleGoogleCallback(code);
-        res.send(`<html><body style="font-family:Arial;text-align:center;padding:50px;background:#0a0a0a;color:white">
-            <h1 style="color:#25d366">✅ Google Conectado!</h1>
-            <p>Bem-vindo, <strong>${result.profile.name}</strong></p>
-            <p>${result.profile.email}</p>
-            <script>setTimeout(()=>window.close(),2000)</script>
-        </body></html>`);
+        res.send(`<h2>✅ Google Conectado!</h2><p>Bem-vindo, <b>${result.profile.name}</b></p><p>${result.profile.email}</p>`);
     } catch (e) {
-        res.send(`<html><body style="text-align:center;padding:50px"><h1>Erro</h1><p>${e.message}</p><button onclick="window.close()">Fechar</button></body></html>`);
+        res.send(`<h2>Erro</h2><p>${e.message}</p>`);
     }
 });
 
@@ -357,7 +429,7 @@ app.post('/auth/icloud', async (req, res) => {
 
 app.post('/auth/icloud/disconnect', (req, res) => {
     appState.icloud.connected = false;
-    appState.icloud.appleId = null;
+State.icloud.appleId = null;
     broadcast('agenda-update', { icloud: false });
     res.json({ ok: true });
 });
@@ -371,13 +443,23 @@ app.put('/sequencer', (req, res) => {
     res.json(appState.sequencer);
 });
 
-app.post('/contacts/save', (req, res) => {
-    const { phone } = req.body;
-    if (!phone) return res.json({ ok: false, message: 'Telefone obrigatório' });
-    const contact = appState.contacts.find(c => c.phone === phone);
-    if (!contact) return res.json({ ok: false, message: 'Não encontrado' });
+app.post('/contacts/save', async (req, res) => {
+    const { contactId } = req.body;
+    const contact = appState.contacts.find(c => c.id === contactId || c.phone === contactId);
+    if (!contact) return res.json({ ok: false, message: 'Contato não encontrado' });
     if (!contact.pending) return res.json({ ok: false, message: 'Já salvo' });
+
     const name = `${appState.sequencer.prefix} ${appState.sequencer.current}`;
+
+    // Tentar salvar no Google se conectado e tiver numero real
+    if (appState.google.connected && contact.hasRealPhone) {
+        try {
+            await saveContactToGoogle(contact.phone, name);
+        } catch (e) {
+            debugLog('Erro ao salvar no Google: ' + e.message);
+        }
+    }
+
     contact.name = name;
     contact.pending = false;
     contact.savedAt = new Date().toISOString();
@@ -388,18 +470,22 @@ app.post('/contacts/save', (req, res) => {
     res.json({ ok: true, contact });
 });
 
-app.post('/contacts/save-all', (req, res) => {
+app.post('/contacts/save-all', async (req, res) => {
     const pending = appState.contacts.filter(c => c.pending);
     if (!pending.length) return res.json({ ok: false, message: 'Nenhum pendente' });
     let saved = 0;
-    pending.forEach(c => {
-        c.name = `${appState.sequencer.prefix} ${appState.sequencer.current}`;
+    for (const c of pending) {
+        const name = `${appState.sequencer.prefix} ${appState.sequencer.current}`;
+        if (appState.google.connected && c.hasRealPhone) {
+            try { await saveContactToGoogle(c.phone, name); } catch (e) {}
+        }
+        c.name = name;
         c.pending = false;
         c.savedAt = new Date().toISOString();
         c.source = 'bulk';
         appState.sequencer.current++;
         saved++;
-    });
+    }
     appState.stats.pending = 0;
     appState.stats.savedToday += saved;
     res.json({ ok: true, saved, message: `${saved} contatos salvos` });
@@ -429,7 +515,7 @@ app.get('/events', (req, res) => {
 app.get('/', (req, res) => {
     const idx = path.join(__dirname, '../frontend/index.html');
     if (fs.existsSync(idx)) res.sendFile(idx);
-    else res.send('<html><body style="background:#0a0a0a;color:#fff;text-align:center;padding:40px"><h1 style="color:#25d366">🚀 ContatoSync</h1><p>Online</p></body></html>');
+    else res.send('<h1>🚀 ContatoSync Online</h1>');
 });
 
 app.use((err, req, res, next) => {
@@ -442,16 +528,8 @@ app.get('*', (req, res) => res.status(404).send('Not found'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     log(`🚀 ContatoSync iniciado na porta ${PORT}`);
-    log('✅ Logger Baileys com .child() configurado');
-    log('✅ Pronto para conectar WhatsApp');
+    initWhatsApp().catch(e => log('Erro ao iniciar WhatsApp: ' + e.message, 'error'));
 });
 
-process.on('SIGTERM', () => {
-    log('Encerrando por SIGTERM...');
-    process.exit(0);
-});
-
-process.on('SIGINT', () => {
-    log('Encerrando por SIGINT...');
-    process.exit(0);
-});
+process.on('SIGTERM', () => { log('Encerrando...'); process.exit(0); });
+process.on('SIGINT', () => { log('Encerrando...'); process.exit(0); });
