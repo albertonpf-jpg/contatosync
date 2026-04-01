@@ -247,6 +247,34 @@ async function isPhoneInGoogle(phone) {
     } catch (e) { return false; }
 }
 
+async function isPhoneInICloud(phone) {
+    if (!appState.icloud.connected || !appState.icloud.addressBookUrl) return false;
+    try {
+        const cleanPhone = phone.replace(/\D/g, '');
+        const reportXml = `<?xml version="1.0" encoding="utf-8"?>
+<C:addressbook-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
+    <D:prop><D:getetag/><C:address-data/></D:prop>
+    <C:filter>
+        <C:prop-filter name="TEL">
+            <C:text-match collation="i;unicode-casemap" match-type="contains">${cleanPhone.slice(-8)}</C:text-match>
+        </C:prop-filter>
+    </C:filter>
+</C:addressbook-query>`;
+
+        const response = await axios({
+            method: 'REPORT',
+            url: appState.icloud.addressBookUrl,
+            auth: { username: appState.icloud.appleId, password: appState.icloud.appPassword },
+            headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Depth': '1' },
+            data: reportXml,
+            timeout: 10000,
+            validateStatus: (s) => s < 500
+        });
+
+        return response.data && response.data.includes('<C:address-data>');
+    } catch (e) { return false; }
+}
+
 // =============================================
 // ICLOUD CardDAV — salvamento implementado
 // =============================================
@@ -424,8 +452,26 @@ async function syncHistory() {
                 const jaNoSistema = appState.contacts.find(c => c.phone === phone);
                 if (jaNoSistema) { appState.sync.skipped++; continue; }
 
-                const jaNoGoogle = await isPhoneInGoogle(phone);
-                if (jaNoGoogle) {
+                const jaNoGoogle = appState.google.connected ? await isPhoneInGoogle(phone) : false;
+                const jaNoICloud = appState.icloud.connected ? await isPhoneInICloud(phone) : false;
+
+                if ((appState.google.connected && jaNoGoogle) && (appState.icloud.connected && jaNoICloud)) {
+                    appState.sync.skipped++;
+                    const c = { id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6), phone, name: chat.name || phone, pushName: chat.name || null, pending: false, hasRealPhone: true, savedToAgenda: true, erroAgenda: null, detected: new Date().toISOString(), savedAt: new Date().toISOString(), source: 'sync-existing' };
+                    appState.contacts.push(c);
+                    await saveContact(c);
+                    continue;
+                }
+
+                if (jaNoGoogle && !appState.icloud.connected) {
+                    appState.sync.skipped++;
+                    const c = { id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6), phone, name: chat.name || phone, pushName: chat.name || null, pending: false, hasRealPhone: true, savedToAgenda: true, erroAgenda: null, detected: new Date().toISOString(), savedAt: new Date().toISOString(), source: 'sync-existing' };
+                    appState.contacts.push(c);
+                    await saveContact(c);
+                    continue;
+                }
+
+                if (jaNoICloud && !appState.google.connected) {
                     appState.sync.skipped++;
                     const c = { id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6), phone, name: chat.name || phone, pushName: chat.name || null, pending: false, hasRealPhone: true, savedToAgenda: true, erroAgenda: null, detected: new Date().toISOString(), savedAt: new Date().toISOString(), source: 'sync-existing' };
                     appState.contacts.push(c);
@@ -440,12 +486,12 @@ async function syncHistory() {
                 let savedAgenda = false;
                 let erroAgenda = null;
 
-                if (appState.google.connected) {
+                if (appState.google.connected && !jaNoGoogle) {
                     try { await saveContactToGoogle(phone, name); savedAgenda = true; }
                     catch (e) { erroAgenda = 'Google: ' + e.message; appState.sync.errors++; }
                 }
 
-                if (appState.icloud.connected) {
+                if (appState.icloud.connected && !jaNoICloud) {
                     try { await saveContactToICloud(phone, name); savedAgenda = true; }
                     catch (e) {
                         erroAgenda = (erroAgenda ? erroAgenda + ' | ' : '') + 'iCloud: ' + e.message;
@@ -555,6 +601,22 @@ async function initWhatsApp() {
                 const jaExiste = appState.contacts.find(c => c.phone === phone);
                 if (jaExiste) { debugLog('Contato já existe: ' + phone); continue; }
 
+                const jaNoGoogle = appState.google.connected ? await isPhoneInGoogle(phone) : false;
+                const jaNoICloud = appState.icloud.connected ? await isPhoneInICloud(phone) : false;
+
+                if ((appState.google.connected && jaNoGoogle) && (appState.icloud.connected && jaNoICloud)) {
+                    debugLog('Contato já existe nas agendas: ' + phone);
+                    continue;
+                }
+                if (jaNoGoogle && !appState.icloud.connected) {
+                    debugLog('Contato já existe no Google: ' + phone);
+                    continue;
+                }
+                if (jaNoICloud && !appState.google.connected) {
+                    debugLog('Contato já existe no iCloud: ' + phone);
+                    continue;
+                }
+
                 const name = buildContactName(msg.pushName);
                 appState.sequencer.current++;
                 await saveSequencer();
@@ -562,12 +624,12 @@ async function initWhatsApp() {
                 let savedAgenda = false;
                 let erroAgenda = null;
 
-                if (appState.google.connected) {
+                if (appState.google.connected && !jaNoGoogle) {
                     try { await saveContactToGoogle(phone, name); savedAgenda = true; }
                     catch (e) { erroAgenda = 'Google: ' + e.message; debugLog('Erro Google: ' + e.message); }
                 }
 
-                if (appState.icloud.connected) {
+                if (appState.icloud.connected && !jaNoICloud) {
                     try { await saveContactToICloud(phone, name); savedAgenda = true; }
                     catch (e) {
                         erroAgenda = (erroAgenda ? erroAgenda + ' | ' : '') + 'iCloud: ' + e.message;
@@ -716,11 +778,15 @@ app.post('/contacts/save', async (req, res) => {
     const contact = appState.contacts.find(c => c.id === contactId || c.phone === contactId);
     if (!contact) return res.json({ ok: false, message: 'Contato não encontrado' });
     if (!contact.pending) return res.json({ ok: false, message: 'Já salvo' });
+
+    const jaNoGoogle = appState.google.connected ? await isPhoneInGoogle(contact.phone) : false;
+    const jaNoICloud = appState.icloud.connected ? await isPhoneInICloud(contact.phone) : false;
+
     const name = buildContactName(contact.pushName || null);
-    if (appState.google.connected) {
+    if (appState.google.connected && !jaNoGoogle) {
         try { await saveContactToGoogle(contact.phone, name); } catch (e) { debugLog('Erro Google: ' + e.message); }
     }
-    if (appState.icloud.connected) {
+    if (appState.icloud.connected && !jaNoICloud) {
         try { await saveContactToICloud(contact.phone, name); } catch (e) { debugLog('Erro iCloud: ' + e.message); }
     }
     contact.name = name;
@@ -740,9 +806,12 @@ app.post('/contacts/save-all', async (req, res) => {
     if (!pending.length) return res.json({ ok: false, message: 'Nenhum pendente' });
     let saved = 0;
     for (const c of pending) {
+        const jaNoGoogle = appState.google.connected ? await isPhoneInGoogle(c.phone) : false;
+        const jaNoICloud = appState.icloud.connected ? await isPhoneInICloud(c.phone) : false;
+
         const name = buildContactName(c.pushName || null);
-        if (appState.google.connected) { try { await saveContactToGoogle(c.phone, name); } catch (e) {} }
-        if (appState.icloud.connected) { try { await saveContactToICloud(c.phone, name); } catch (e) {} }
+        if (appState.google.connected && !jaNoGoogle) { try { await saveContactToGoogle(c.phone, name); } catch (e) {} }
+        if (appState.icloud.connected && !jaNoICloud) { try { await saveContactToICloud(c.phone, name); } catch (e) {} }
         c.name = name;
         c.pending = false;
         c.savedAt = new Date().toISOString();
