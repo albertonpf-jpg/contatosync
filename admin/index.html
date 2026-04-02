@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ContatoSync Admin - Painel de Gestão</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-box">
+            <div class="login-logo">
+                <span class="logo-icon">📱</span>
+                <h1>ContatoSync Admin</h1>
+            </div>
+            <form id="loginForm">
+                <input type="password" id="loginPassword" placeholder="Senha de acesso" required autocomplete="current-password">
+                <button type="submit" class="btn-primary">Entrar</button>
+            </form>
+            <p class="login-hint">Senha padrão: admin123 (altere em settings.js)</p>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="main-app" style="display: none;">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <span class="logo-icon">📱</span>
+                <span>ContatoSync</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-view="dashboard">
+                    <span>📊</span> Dashboard
+                </a>
+                <a href="#" class="nav-item" data-view="clients">
+                    <span>👥</span> Clientes
+                </a>
+                <a href="#" class="nav-item" data-view="finance">
+                    <span>💰</span> Financeiro
+                </a>
+                <a href="#" class="nav-item" data-view="stats">
+                    <span>📈</span> Estatísticas
+                </a>
+                <a href="#" class="nav-item" data-view="setup">
+                    <span>⚙️</span> Novo Setup
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button id="logoutBtn" class="btn-logout">Sair</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <h2 id="viewTitle">Dashboard</h2>
+                <div class="top-bar-actions">
+                    <button class="btn-action" id="addClientBtn">+ Novo Cliente</button>
+                    <span class="user-info">👤 Alberto Nascimento</span>
+                </div>
+            </header>
+
+            <!-- Dashboard View -->
+            <div id="dashboardView" class="view active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-info">
+                            <h3 id="totalClients">0</h3>
+                            <p>Clientes Ativos</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">💰</div>
+                        <div class="stat-info">
+                            <h3 id="monthlyRevenue">R$ 0</h3>
+                            <p>Receita Mensal</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📈</div>
+                        <div class="stat-info">
+                            <h3 id="setupRevenue">R$ 0</h3>
+                            <p>Setup Este Mês</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⏰</div>
+                        <div class="stat-info">
+                            <h3 id="pendingPayments">0</h3>
+                            <p>Pagamentos Pendentes</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h3>Próximos Vencimentos</h3>
+                        <div id="upcomingPayments" class="list">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Últimas Atividades</h3>
+                        <div id="recentActivity" class="list">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clients View -->
+            <div id="clientsView" class="view">
+                <div class="table-actions">
+                    <input type="text" id="searchClients" placeholder="Buscar cliente..." class="search-input">
+                    <select id="filterStatus" class="filter-select">
+                        <option value="">Todos os status</option>
+                        <option value="ativo">Ativo</option>
+                        <option value="teste">Teste</option>
+                        <option value="inadimplente">Inadimplente</option>
+                        <option value="cancelado">Cancelado</option>
+                    </select>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Plano</th>
+                            <th>Status</th>
+                            <th>Railway URL</th>
+                            <th>Instalado Em</th>
+                            <th>Próx. Pgto</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clientsTableBody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Finance View -->
+            <div id="financeView" class="view">
+                <div class="finance-summary">
+                    <div class="finance-card">
+                        <h4>Receita Total (Este Mês)</h4>
+                        <p class="finance-value" id="financeTotal">R$ 0,00</p>
+                    </div>
+                    <div class="finance-card">
+                        <h4>Custos Railway</h4>
+                        <p class="finance-value" id="railwayCosts">R$ 0,00</p>
+                    </div>
+                    <div class="finance-card">
+                        <h4>Lucro Líquido</h4>
+                        <p class="finance-value finance-profit" id="netProfit">R$ 0,00</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Histórico de Pagamentos</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Cliente</th>
+                                <th>Tipo</th>
+                                <th>Valor</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="paymentsTableBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Stats View -->
+            <div id="statsView" class="view">
+                <div class="stats-summary">
+                    <h3>Resumo Geral</h3>
+                    <div class="stats-list">
+                        <div class="stats-item">
+                            <span>Total de clientes cadastrados:</span>
+                            <strong id="statsTotal">0</strong>
+                        </div>
+                        <div class="stats-item">
+                            <span>Clientes ativos:</span>
+                            <strong id="statsActive">0</strong>
+                        </div>
+                        <div class="stats-item">
+                            <span>Em período de teste:</span>
+                            <strong id="statsTest">0</strong>
+                        </div>
+                        <div class="stats-item">
+                            <span>Taxa de conversão (teste → ativo):</span>
+                            <strong id="statsConversion">0%</strong>
+                        </div>
+                        <div class="stats-item">
+                            <span>Ticket médio mensal:</span>
+                            <strong id="statsAvgTicket">R$ 0</strong>
+                        </div>
+                        <div class="stats-item">
+                            <span>LTV médio por cliente:</span>
+                            <strong id="statsLTV">R$ 0</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Distribuição por Plano</h3>
+                    <div id="planDistribution" class="chart">
+                        <!-- Chart will go here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Setup View -->
+            <div id="setupView" class="view">
+                <div class="card">
+                    <h3>🚀 Checklist de Setup - Novo Cliente</h3>
+                    <p class="setup-intro">Use este guia para instalar o ContatoSync para um novo cliente (tempo estimado: 15min)</p>
+
+                    <div class="setup-steps">
+                        <div class="setup-step">
+                            <input type="checkbox" id="step1">
+                            <label for="step1">
+                                <strong>1. Criar fork/template no GitHub</strong><br>
+                                <small>albertonpf-jpg/contatosync → Fork → Nome: contatosync-[cliente]</small>
+                            </label>
+                        </div>
+
+                        <div class="setup-step">
+                            <input type="checkbox" id="step2">
+                            <label for="step2">
+                                <strong>2. Deploy no Railway</strong><br>
+                                <small>New Project → Deploy from GitHub → Selecionar repo criado</small>
+                            </label>
+                        </div>
+
+                        <div class="setup-step">
+                            <input type="checkbox" id="step3">
+                            <label for="step3">
+                                <strong>3. Configurar variáveis Railway</strong><br>
+                                <small>Variables → Raw Editor → Colar template do .env</small>
+                            </label>
+                        </div>
+
+                        <div class="setup-step">
+                            <input type="checkbox" id="step4">
+                            <label for="step4">
+                                <strong>4. Gerar domínio Railway</strong><br>
+                                <small>Settings → Generate Domain → Atualizar GOOGLE_REDIRECT_URI</small>
+                            </label>
+                        </div>
+
+                        <div class="setup-step">
+                            <input type="checkbox" id="step5">
+                            <label for="step5">
+                                <strong>5. Criar projeto Google Cloud</strong><br>
+                                <small>console.cloud.google.com → Novo Projeto → Ativar People API</small>
+                            </label>
+                        </div>
+
+                        <div class="setup-step">
+                            <input type="checkbox" id="step6">
+                            <label for="step6">
+                                <strong>6. Criar credenciais OAuth</strong><br>
+                                <small>Credenciais → OAuth 2.0 → Copiar Client ID e Secret</small>
+                            </label>
+                        </div>
+
+                        <div class="setup-step">
+                            <input type="checkbox" id="step7">
+                            <label for="step7">
+                                <strong>7. Testar instalação</strong><br>
+                                <small>Acessar URL → Conectar WhatsApp → Conectar Google → Teste de mensagem</small>
+                            </label>
+                        </div>
+
+                        <div class="setup-step">
+                            <input type="checkbox" id="step8">
+                            <label for="step8">
+                                <strong>8. Adicionar cliente no sistema</strong><br>
+                                <small>Usar botão "Novo Cliente" e preencher dados completos</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="setup-actions">
+                        <a href="../REPLICACAO-RAPIDA.md" target="_blank" class="btn-outline">📄 Ver Guia Completo</a>
+                        <button id="runSetupScript" class="btn-primary">🔧 Executar Script de Setup</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Add/Edit Client -->
+    <div id="clientModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Novo Cliente</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="clientForm">
+                <input type="hidden" id="clientId">
+
+                <div class="form-group">
+                    <label>Nome do Cliente</label>
+                    <input type="text" id="clientName" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="clientEmail" required>
+                </div>
+
+                <div class="form-group">
+                    <label>WhatsApp</label>
+                    <input type="tel" id="clientPhone" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Empresa/Segmento</label>
+                    <input type="text" id="clientCompany" placeholder="Ex: Loja de Roupas">
+                </div>
+
+                <div class="form-group">
+                    <label>Plano</label>
+                    <select id="clientPlan" required>
+                        <option value="basico">Básico - R$ 97/mês</option>
+                        <option value="pro" selected>Profissional - R$ 147/mês</option>
+                        <option value="enterprise">Enterprise - R$ 297/mês</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>URL Railway</label>
+                    <input type="url" id="clientRailwayUrl" placeholder="https://xxxxx.up.railway.app">
+                </div>
+
+                <div class="form-group">
+                    <label>Repositório GitHub</label>
+                    <input type="url" id="clientGithubRepo" placeholder="https://github.com/...">
+                </div>
+
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="clientStatus" required>
+                        <option value="teste">Em Teste (15 dias grátis)</option>
+                        <option value="ativo">Ativo</option>
+                        <option value="inadimplente">Inadimplente</option>
+                        <option value="cancelado">Cancelado</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Data de Instalação</label>
+                    <input type="date" id="clientInstallDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Valor Setup (pago uma vez)</label>
+                    <input type="number" id="clientSetupFee" value="397" min="0">
+                </div>
+
+                <div class="form-group">
+                    <label>Observações</label>
+                    <textarea id="clientNotes" rows="3" placeholder="Notas internas..."></textarea>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-outline modal-close">Cancelar</button>
+                    <button type="submit" class="btn-primary">Salvar Cliente</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="settings.js"></script>
+    <script src="storage.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

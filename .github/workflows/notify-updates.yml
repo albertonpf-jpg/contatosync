@@ -1,0 +1,127 @@
+name: Notificar Atualizações Disponíveis
+
+# Verifica se há atualizações do template principal e notifica
+# Útil quando sync automático está desabilitado
+
+on:
+  schedule:
+    - cron: '0 10 * * *' # Todo dia às 10h
+  workflow_dispatch:
+
+jobs:
+  check-updates:
+    name: Verificar Atualizações
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Adicionar upstream
+        run: |
+          git remote add upstream https://github.com/albertonpf-jpg/contatosync.git || true
+          git fetch upstream
+
+      - name: Verificar se há atualizações
+        id: check
+        run: |
+          # Contar commits à frente no upstream
+          COMMITS_BEHIND=$(git rev-list --count HEAD..upstream/main)
+
+          echo "commits_behind=$COMMITS_BEHIND" >> $GITHUB_OUTPUT
+
+          if [ "$COMMITS_BEHIND" -gt 0 ]; then
+            echo "🔔 $COMMITS_BEHIND atualização(ões) disponível(is)!"
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+
+            # Listar commits
+            echo "📋 Atualizações:" >> $GITHUB_STEP_SUMMARY
+            git log HEAD..upstream/main --oneline --no-decorate >> $GITHUB_STEP_SUMMARY
+
+          else
+            echo "✅ Repositório atualizado!"
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Criar Issue com atualizações disponíveis
+        if: steps.check.outputs.has_updates == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const commitsCount = '${{ steps.check.outputs.commits_behind }}';
+
+            // Verificar se já existe issue aberta
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'update-available'
+            });
+
+            if (issues.data.length > 0) {
+              console.log('✅ Issue de atualização já existe');
+              return;
+            }
+
+            // Criar nova issue
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔔 ${commitsCount} Atualização(ões) Disponível(is)`,
+              body: `## Atualizações Disponíveis
+
+            Há **${commitsCount}** nova(s) atualização(ões) no template principal do ContatoSync.
+
+            ### Como Atualizar
+
+            #### Opção 1: Automático (Recomendado)
+            1. Ir em [Actions → Sync com Template Principal](/${context.repo.owner}/${context.repo.repo}/actions/workflows/sync-upstream.yml)
+            2. Clicar em "Run workflow"
+            3. Aguardar conclusão
+
+            #### Opção 2: Manual
+            \`\`\`bash
+            git remote add upstream https://github.com/albertonpf-jpg/contatosync.git
+            git fetch upstream
+            git merge upstream/main
+            git push
+            \`\`\`
+
+            ### Verificar Changelog
+            Ver detalhes em: https://github.com/albertonpf-jpg/contatosync/commits/main
+
+            ---
+            _Issue gerada automaticamente pelo workflow \`notify-updates.yml\`_
+            _Feche esta issue após aplicar as atualizações._
+            `,
+              labels: ['update-available', 'automated']
+            });
+
+            console.log('✅ Issue criada com sucesso');
+
+      - name: Resumo
+        run: |
+          if [ "${{ steps.check.outputs.has_updates }}" = "true" ]; then
+            echo "🔔 Há ${{ steps.check.outputs.commits_behind }} atualização(ões) disponível(is)"
+            echo "📌 Issue criada para acompanhamento"
+          else
+            echo "✅ Nenhuma atualização disponível"
+          fi
+
+# ============================================
+# CONFIGURAÇÃO:
+# ============================================
+#
+# Este workflow cria automaticamente uma GitHub Issue
+# quando detecta atualizações disponíveis.
+#
+# Para receber notificações:
+# 1. Watch → Custom → Issues
+# 2. Você receberá email quando issue for criada
+#
+# Para desabilitar criação de issues:
+# - Comente o step "Criar Issue..."
+#
+# ============================================

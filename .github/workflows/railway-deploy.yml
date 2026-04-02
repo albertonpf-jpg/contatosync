@@ -1,0 +1,91 @@
+name: Deploy Automático Railway
+
+# Deploy automático no Railway quando há push na branch main
+# Também pode ser acionado manualmente
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy no Railway
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci --no-package-lock
+
+      - name: Verificar código
+        run: |
+          echo "✅ Verificando sintaxe JavaScript..."
+          node -c src/index.js
+          node -c src/whatsapp.js
+          echo "✅ Código OK!"
+
+      - name: Deploy Railway via CLI
+        if: vars.RAILWAY_TOKEN != ''
+        run: |
+          npm install -g @railway/cli
+          railway up --service ${{ vars.RAILWAY_SERVICE_ID || 'contatosync' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Verificar health check
+        if: vars.RAILWAY_URL != ''
+        run: |
+          echo "⏳ Aguardando 30s para app iniciar..."
+          sleep 30
+
+          echo "🔍 Verificando health check..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.RAILWAY_URL }}/health || echo "000")
+
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Deploy bem-sucedido! App respondendo normalmente."
+          else
+            echo "⚠️ Aviso: Health check retornou código $RESPONSE"
+            echo "Verifique os logs do Railway manualmente."
+          fi
+
+      - name: Notificar sucesso
+        if: success()
+        run: |
+          echo "🚀 Deploy concluído com sucesso!"
+          echo "URL: ${{ vars.RAILWAY_URL }}"
+
+      - name: Notificar falha
+        if: failure()
+        run: |
+          echo "❌ Deploy falhou!"
+          echo "Verifique os logs acima para detalhes."
+
+# ============================================
+# CONFIGURAÇÃO NECESSÁRIA:
+# ============================================
+#
+# 1. No GitHub, vá em Settings → Secrets and variables → Actions
+#
+# 2. Adicione os seguintes SECRETS:
+#    - RAILWAY_TOKEN: Token de API do Railway
+#      (Obter em: https://railway.app/account/tokens)
+#
+# 3. Adicione as seguintes VARIABLES:
+#    - RAILWAY_SERVICE_ID: ID do serviço no Railway (opcional)
+#    - RAILWAY_URL: URL do app (ex: https://xxxxx.up.railway.app)
+#
+# ============================================

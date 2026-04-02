@@ -1,0 +1,71 @@
+name: Sync com Template Principal
+
+# Sincroniza automaticamente com o repositório upstream (template principal)
+# Roda toda segunda-feira às 9h ou pode ser acionado manualmente
+
+on:
+  schedule:
+    - cron: '0 9 * * 1' # Segunda-feira às 9h
+  workflow_dispatch: # Permite execução manual
+
+jobs:
+  sync:
+    name: Sincronizar com Upstream
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar Git
+        run: |
+          git config user.name "ContatoSync Bot"
+          git config user.email "noreply@contatosync.com"
+
+      - name: Adicionar remote upstream
+        run: |
+          git remote add upstream https://github.com/albertonpf-jpg/contatosync.git || true
+          git fetch upstream
+
+      - name: Verificar atualizações
+        id: check_updates
+        run: |
+          UPDATES=$(git log HEAD..upstream/main --oneline)
+          if [ -z "$UPDATES" ]; then
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+            echo "✅ Repositório já está atualizado"
+          else
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "📦 Atualizações disponíveis:"
+            echo "$UPDATES"
+          fi
+
+      - name: Merge upstream (se houver atualizações)
+        if: steps.check_updates.outputs.has_updates == 'true'
+        run: |
+          git merge upstream/main -m "chore: sync com template principal" || {
+            echo "⚠️ Conflito detectado! Abortando merge."
+            echo "Por favor, resolva manualmente e execute novamente."
+            git merge --abort
+            exit 1
+          }
+
+      - name: Push atualizações
+        if: steps.check_updates.outputs.has_updates == 'true'
+        run: |
+          git push origin main
+
+      - name: Resumo
+        if: steps.check_updates.outputs.has_updates == 'true'
+        run: |
+          echo "✅ Sincronização concluída!"
+          echo "Atualizações aplicadas com sucesso."
+
+      - name: Notificar em caso de erro
+        if: failure()
+        run: |
+          echo "❌ Falha na sincronização!"
+          echo "Verifique se há conflitos manuais a resolver."
