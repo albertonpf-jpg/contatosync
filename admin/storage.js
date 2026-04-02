@@ -1,110 +1,194 @@
 // ============================================
-// STORAGE - Gerenciamento de Dados LocalStorage
+// STORAGE - Gerenciamento de Dados com Supabase
 // ============================================
 
 const Storage = {
-    // Keys
-    CLIENTS_KEY: 'contatosync_clients',
-    PAYMENTS_KEY: 'contatosync_payments',
-    ACTIVITIES_KEY: 'contatosync_activities',
-    AUTH_KEY: 'contatosync_auth',
-
     // ============ CLIENTS ============
-    getClients() {
-        const data = localStorage.getItem(this.CLIENTS_KEY);
-        return data ? JSON.parse(data) : [];
-    },
+    async getClients() {
+        const { data, error } = await supabaseClient
+            .from('clients')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-    saveClients(clients) {
-        localStorage.setItem(this.CLIENTS_KEY, JSON.stringify(clients));
-    },
-
-    addClient(client) {
-        const clients = this.getClients();
-        client.id = this.generateId();
-        client.createdAt = new Date().toISOString();
-        clients.push(client);
-        this.saveClients(clients);
-        this.addActivity(`Novo cliente adicionado: ${client.name}`);
-        return client;
-    },
-
-    updateClient(id, updates) {
-        const clients = this.getClients();
-        const index = clients.findIndex(c => c.id === id);
-        if (index !== -1) {
-            clients[index] = { ...clients[index], ...updates, updatedAt: new Date().toISOString() };
-            this.saveClients(clients);
-            this.addActivity(`Cliente atualizado: ${clients[index].name}`);
-            return clients[index];
+        if (error) {
+            console.error('Erro ao buscar clientes:', error);
+            return [];
         }
-        return null;
+        return data || [];
     },
 
-    deleteClient(id) {
-        const clients = this.getClients();
-        const client = clients.find(c => c.id === id);
+    async addClient(client) {
+        const newClient = {
+            ...client,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        };
+
+        const { data, error } = await supabaseClient
+            .from('clients')
+            .insert([newClient])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Erro ao adicionar cliente:', error);
+            throw error;
+        }
+
+        await this.addActivity(`Novo cliente adicionado: ${client.name}`);
+        return data;
+    },
+
+    async updateClient(id, updates) {
+        const { data, error } = await supabaseClient
+            .from('clients')
+            .update({ ...updates, updated_at: new Date().toISOString() })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Erro ao atualizar cliente:', error);
+            throw error;
+        }
+
+        await this.addActivity(`Cliente atualizado: ${data.name}`);
+        return data;
+    },
+
+    async deleteClient(id) {
+        // Buscar cliente antes de deletar para pegar o nome
+        const { data: client } = await supabaseClient
+            .from('clients')
+            .select('name')
+            .eq('id', id)
+            .single();
+
+        const { error } = await supabaseClient
+            .from('clients')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Erro ao deletar cliente:', error);
+            return false;
+        }
+
         if (client) {
-            const filtered = clients.filter(c => c.id !== id);
-            this.saveClients(filtered);
-            this.addActivity(`Cliente removido: ${client.name}`);
-            return true;
+            await this.addActivity(`Cliente removido: ${client.name}`);
         }
-        return false;
+        return true;
     },
 
-    getClientById(id) {
-        const clients = this.getClients();
-        return clients.find(c => c.id === id);
+    async getClientById(id) {
+        const { data, error } = await supabaseClient
+            .from('clients')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error) {
+            console.error('Erro ao buscar cliente:', error);
+            return null;
+        }
+        return data;
     },
 
     // ============ PAYMENTS ============
-    getPayments() {
-        const data = localStorage.getItem(this.PAYMENTS_KEY);
-        return data ? JSON.parse(data) : [];
+    async getPayments() {
+        const { data, error } = await supabaseClient
+            .from('payments')
+            .select('*')
+            .order('date', { ascending: false });
+
+        if (error) {
+            console.error('Erro ao buscar pagamentos:', error);
+            return [];
+        }
+        return data || [];
     },
 
-    savePayments(payments) {
-        localStorage.setItem(this.PAYMENTS_KEY, JSON.stringify(payments));
+    async addPayment(payment) {
+        const newPayment = {
+            ...payment,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        };
+
+        const { data, error } = await supabaseClient
+            .from('payments')
+            .insert([newPayment])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Erro ao adicionar pagamento:', error);
+            throw error;
+        }
+
+        await this.addActivity(`Pagamento registrado: ${payment.client_name} - R$ ${payment.amount}`);
+        return data;
     },
 
-    addPayment(payment) {
-        const payments = this.getPayments();
-        payment.id = this.generateId();
-        payment.createdAt = new Date().toISOString();
-        payments.push(payment);
-        this.savePayments(payments);
-        this.addActivity(`Pagamento registrado: ${payment.clientName} - R$ ${payment.amount}`);
-        return payment;
+    async updatePayment(id, updates) {
+        const { data, error } = await supabaseClient
+            .from('payments')
+            .update({ ...updates, updated_at: new Date().toISOString() })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Erro ao atualizar pagamento:', error);
+            throw error;
+        }
+        return data;
+    },
+
+    async deletePayment(id) {
+        const { error } = await supabaseClient
+            .from('payments')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Erro ao deletar pagamento:', error);
+            return false;
+        }
+        return true;
     },
 
     // ============ ACTIVITIES ============
-    getActivities() {
-        const data = localStorage.getItem(this.ACTIVITIES_KEY);
-        return data ? JSON.parse(data) : [];
-    },
+    async getActivities(limit = 100) {
+        const { data, error } = await supabaseClient
+            .from('activities')
+            .select('*')
+            .order('timestamp', { ascending: false })
+            .limit(limit);
 
-    saveActivities(activities) {
-        localStorage.setItem(this.ACTIVITIES_KEY, JSON.stringify(activities));
-    },
-
-    addActivity(message) {
-        const activities = this.getActivities();
-        activities.unshift({
-            id: this.generateId(),
-            message,
-            timestamp: new Date().toISOString()
-        });
-        // Manter apenas últimas 100 atividades
-        if (activities.length > 100) {
-            activities.length = 100;
+        if (error) {
+            console.error('Erro ao buscar atividades:', error);
+            return [];
         }
-        this.saveActivities(activities);
+        return data || [];
+    },
+
+    async addActivity(message) {
+        const { error } = await supabaseClient
+            .from('activities')
+            .insert([{
+                message,
+                timestamp: new Date().toISOString()
+            }]);
+
+        if (error) {
+            console.error('Erro ao adicionar atividade:', error);
+        }
     },
 
     // ============ AUTH ============
     isAuthenticated() {
-        const auth = localStorage.getItem(this.AUTH_KEY);
+        const auth = localStorage.getItem('contatosync_auth');
         if (!auth) return false;
         const { timestamp } = JSON.parse(auth);
         // Expirar após 24 horas
@@ -113,130 +197,55 @@ const Storage = {
     },
 
     login() {
-        localStorage.setItem(this.AUTH_KEY, JSON.stringify({
+        localStorage.setItem('contatosync_auth', JSON.stringify({
             timestamp: Date.now()
         }));
     },
 
     logout() {
-        localStorage.removeItem(this.AUTH_KEY);
-    },
-
-    // ============ UTILS ============
-    generateId() {
-        return 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    },
-
-    // ============ DEMO DATA ============
-    seedDemoData() {
-        // Verifica se já tem dados
-        if (this.getClients().length > 0) return;
-
-        // Adicionar clientes de exemplo
-        const demoClients = [
-            {
-                name: 'Loja ABC',
-                email: 'contato@lojaabc.com.br',
-                phone: '(11) 99999-1111',
-                company: 'Loja de Roupas',
-                plan: 'pro',
-                status: 'ativo',
-                railwayUrl: 'https://contatosync-lojaabc.up.railway.app',
-                githubRepo: 'https://github.com/albertonpf-jpg/contatosync-lojaabc',
-                installDate: '2026-03-15',
-                setupFee: 397,
-                notes: 'Cliente satisfeito, indicou 2 amigos'
-            },
-            {
-                name: 'Imobiliária XYZ',
-                email: 'contato@imobxyz.com.br',
-                phone: '(11) 88888-2222',
-                company: 'Imobiliária',
-                plan: 'enterprise',
-                status: 'ativo',
-                railwayUrl: 'https://contatosync-imobxyz.up.railway.app',
-                githubRepo: 'https://github.com/albertonpf-jpg/contatosync-imobxyz',
-                installDate: '2026-03-20',
-                setupFee: 697,
-                notes: 'Empresa grande, possível expansão para 3 números'
-            },
-            {
-                name: 'João Vendedor',
-                email: 'joao@email.com',
-                phone: '(11) 77777-3333',
-                company: 'Vendedor Autônomo',
-                plan: 'basico',
-                status: 'teste',
-                railwayUrl: 'https://contatosync-joao.up.railway.app',
-                githubRepo: 'https://github.com/albertonpf-jpg/contatosync-joao',
-                installDate: '2026-03-28',
-                setupFee: 0,
-                notes: 'Em período de teste, follow-up dia 12/04'
-            }
-        ];
-
-        demoClients.forEach(client => this.addClient(client));
-
-        // Adicionar alguns pagamentos
-        const demoPayments = [
-            {
-                clientName: 'Loja ABC',
-                type: 'Mensalidade',
-                amount: 147,
-                status: 'pago',
-                date: '2026-03-15'
-            },
-            {
-                clientName: 'Imobiliária XYZ',
-                type: 'Setup',
-                amount: 697,
-                status: 'pago',
-                date: '2026-03-20'
-            },
-            {
-                clientName: 'Imobiliária XYZ',
-                type: 'Mensalidade',
-                amount: 297,
-                status: 'pago',
-                date: '2026-03-20'
-            }
-        ];
-
-        demoPayments.forEach(payment => this.addPayment(payment));
-
-        console.log('✅ Dados de exemplo adicionados!');
+        localStorage.removeItem('contatosync_auth');
     },
 
     // ============ EXPORT/IMPORT ============
-    exportData() {
+    async exportData() {
+        const clients = await this.getClients();
+        const payments = await this.getPayments();
+        const activities = await this.getActivities();
+
         return {
-            clients: this.getClients(),
-            payments: this.getPayments(),
-            activities: this.getActivities(),
+            clients,
+            payments,
+            activities,
             exportedAt: new Date().toISOString()
         };
     },
 
-    importData(data) {
-        if (data.clients) this.saveClients(data.clients);
-        if (data.payments) this.savePayments(data.payments);
-        if (data.activities) this.saveActivities(data.activities);
-        this.addActivity('Dados importados');
+    async importData(data) {
+        if (data.clients && data.clients.length > 0) {
+            for (const client of data.clients) {
+                await this.addClient(client);
+            }
+        }
+        if (data.payments && data.payments.length > 0) {
+            for (const payment of data.payments) {
+                await this.addPayment(payment);
+            }
+        }
+        await this.addActivity('Dados importados');
     },
 
-    clearAllData() {
-        if (confirm('⚠️ ATENÇÃO: Isso vai apagar TODOS os dados. Tem certeza?')) {
-            localStorage.removeItem(this.CLIENTS_KEY);
-            localStorage.removeItem(this.PAYMENTS_KEY);
-            localStorage.removeItem(this.ACTIVITIES_KEY);
-            this.addActivity('Todos os dados foram limpos');
+    async clearAllData() {
+        if (confirm('⚠️ ATENÇÃO: Isso vai apagar TODOS os dados do Supabase. Tem certeza?')) {
+            // Deletar todas as atividades
+            await supabaseClient.from('activities').delete().neq('id', '');
+            // Deletar todos os pagamentos
+            await supabaseClient.from('payments').delete().neq('id', '');
+            // Deletar todos os clientes
+            await supabaseClient.from('clients').delete().neq('id', '');
+
+            await this.addActivity('Todos os dados foram limpos');
             return true;
         }
         return false;
     }
 };
-
-// Seed demo data on first load
-if (Storage.getClients().length === 0) {
-    Storage.seedDemoData();
-}

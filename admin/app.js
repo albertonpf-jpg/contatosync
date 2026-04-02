@@ -70,6 +70,10 @@ const App = {
             this.openClientModal();
         });
 
+        document.getElementById('addFirstClient')?.addEventListener('click', () => {
+            this.openClientModal();
+        });
+
         // Client Form
         document.getElementById('clientForm').addEventListener('submit', (e) => {
             e.preventDefault();
@@ -127,15 +131,18 @@ const App = {
 
         // Load view data
         this.currentView = viewName;
-        this[`load${viewName.charAt(0).toUpperCase() + viewName.slice(1)}`]();
+        const loadMethod = `load${viewName.charAt(0).toUpperCase() + viewName.slice(1)}`;
+        if (typeof this[loadMethod] === 'function') {
+            this[loadMethod]();
+        }
     },
 
     // ============ DASHBOARD ============
-    loadDashboard() {
-        const clients = Storage.getClients();
+    async loadDashboard() {
+        const clients = await Storage.getClients();
         const activeClients = clients.filter(c => c.status === 'ativo');
-        const payments = Storage.getPayments();
-        const activities = Storage.getActivities();
+        const payments = await Storage.getPayments();
+        const activities = await Storage.getActivities();
 
         // Stats
         document.getElementById('totalClients').textContent = activeClients.length;
@@ -147,8 +154,8 @@ const App = {
 
         const currentMonth = new Date().toISOString().slice(0, 7);
         const setupThisMonth = payments
-            .filter(p => p.type === 'Setup' && p.date.startsWith(currentMonth))
-            .reduce((sum, p) => sum + p.amount, 0);
+            .filter(p => p.type === 'Setup' && p.date && p.date.startsWith(currentMonth))
+            .reduce((sum, p) => sum + (p.amount || 0), 0);
         document.getElementById('setupRevenue').textContent = `R$ ${setupThisMonth.toLocaleString('pt-BR')}`;
 
         const pendingCount = clients.filter(c => c.status === 'inadimplente').length;
@@ -166,12 +173,22 @@ const App = {
         const activeClients = clients.filter(c => c.status === 'ativo' || c.status === 'teste');
 
         if (activeClients.length === 0) {
-            container.innerHTML = '<p style="color: var(--gray); padding: 1rem;">Nenhum pagamento pendente</p>';
+            container.innerHTML = `
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    <p>Nenhum vencimento próximo</p>
+                </div>
+            `;
             return;
         }
 
         container.innerHTML = activeClients.slice(0, 5).map(client => {
-            const nextPaymentDate = this.getNextPaymentDate(client.installDate);
+            const nextPaymentDate = this.getNextPaymentDate(client.install_date || client.installDate);
             const daysUntil = this.getDaysUntil(nextPaymentDate);
             const amount = SETTINGS.plans[client.plan]?.monthlyPrice || 0;
 
@@ -191,7 +208,14 @@ const App = {
         const container = document.getElementById('recentActivity');
 
         if (activities.length === 0) {
-            container.innerHTML = '<p style="color: var(--gray); padding: 1rem;">Nenhuma atividade recente</p>';
+            container.innerHTML = `
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                    </svg>
+                    <p>Nenhuma atividade recente</p>
+                </div>
+            `;
             return;
         }
 
@@ -208,32 +232,55 @@ const App = {
     },
 
     // ============ CLIENTS ============
-    loadClients() {
-        this.renderClientsTable(Storage.getClients());
+    async loadClients() {
+        const clients = await Storage.getClients();
+        this.renderClientsTable(clients);
     },
 
     renderClientsTable(clients) {
         const tbody = document.getElementById('clientsTableBody');
 
         if (clients.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--gray);">Nenhum cliente cadastrado</td></tr>';
+            tbody.innerHTML = `
+                <tr class="empty-row">
+                    <td colspan="7">
+                        <div class="empty-state">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                            <p>Nenhum cliente cadastrado ainda</p>
+                            <button class="btn-primary" id="addFirstClient">Adicionar Primeiro Cliente</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            // Re-attach event listener
+            setTimeout(() => {
+                document.getElementById('addFirstClient')?.addEventListener('click', () => {
+                    this.openClientModal();
+                });
+            }, 0);
             return;
         }
 
         tbody.innerHTML = clients.map(client => {
             const plan = SETTINGS.plans[client.plan];
-            const nextPayment = this.getNextPaymentDate(client.installDate);
+            const installDate = client.install_date || client.installDate;
+            const nextPayment = this.getNextPaymentDate(installDate);
 
             return `
                 <tr>
                     <td>
                         <strong>${client.name}</strong><br>
-                        <small style="color: var(--gray);">${client.email}</small>
+                        <small style="color: var(--gray);">${client.email || '-'}</small>
                     </td>
                     <td>${plan?.name || client.plan}</td>
                     <td><span class="status-badge status-${client.status}">${this.getStatusLabel(client.status)}</span></td>
-                    <td><a href="${client.railwayUrl}" target="_blank" style="color: var(--primary);">Ver app</a></td>
-                    <td>${this.formatDate(client.installDate)}</td>
+                    <td><a href="${client.railway_url || client.railwayUrl || '#'}" target="_blank" style="color: var(--primary);">Ver app</a></td>
+                    <td>${this.formatDate(installDate)}</td>
                     <td>${this.formatDate(nextPayment)}</td>
                     <td class="table-actions-cell">
                         <button class="btn-small btn-edit" onclick="App.editClient('${client.id}')">Editar</button>
@@ -244,15 +291,15 @@ const App = {
         }).join('');
     },
 
-    filterClients(search = '', status = '') {
-        let clients = Storage.getClients();
+    async filterClients(search = '', status = '') {
+        let clients = await Storage.getClients();
 
         if (search) {
             search = search.toLowerCase();
             clients = clients.filter(c =>
-                c.name.toLowerCase().includes(search) ||
-                c.email.toLowerCase().includes(search) ||
-                c.company.toLowerCase().includes(search)
+                (c.name && c.name.toLowerCase().includes(search)) ||
+                (c.email && c.email.toLowerCase().includes(search)) ||
+                (c.company && c.company.toLowerCase().includes(search))
             );
         }
 
@@ -264,10 +311,10 @@ const App = {
     },
 
     // ============ FINANCE ============
-    loadFinance() {
-        const clients = Storage.getClients();
+    async loadFinance() {
+        const clients = await Storage.getClients();
         const activeClients = clients.filter(c => c.status === 'ativo');
-        const payments = Storage.getPayments();
+        const payments = await Storage.getPayments();
 
         const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -278,8 +325,8 @@ const App = {
 
         // Setup this month
         const setupRevenue = payments
-            .filter(p => p.type === 'Setup' && p.date.startsWith(currentMonth))
-            .reduce((sum, p) => sum + p.amount, 0);
+            .filter(p => p.type === 'Setup' && p.date && p.date.startsWith(currentMonth))
+            .reduce((sum, p) => sum + (p.amount || 0), 0);
 
         const totalRevenue = monthlyRevenue + setupRevenue;
 
@@ -289,7 +336,7 @@ const App = {
         // Net profit
         const netProfit = totalRevenue - railwayCosts;
 
-        document.getElementById('financeTotal').textContent = `R$ ${totalRevenue.toLocaleString('pt-BR')}`;
+        document.getElementById('totalMonthlyRevenue').textContent = `R$ ${totalRevenue.toLocaleString('pt-BR')}`;
         document.getElementById('railwayCosts').textContent = `R$ ${railwayCosts.toLocaleString('pt-BR')}`;
         document.getElementById('netProfit').textContent = `R$ ${netProfit.toLocaleString('pt-BR')}`;
 
@@ -309,9 +356,9 @@ const App = {
             return `
                 <tr>
                     <td>${this.formatDate(payment.date)}</td>
-                    <td>${payment.clientName}</td>
+                    <td>${payment.client_name || payment.clientName}</td>
                     <td>${payment.type}</td>
-                    <td>R$ ${payment.amount.toLocaleString('pt-BR')}</td>
+                    <td>R$ ${(payment.amount || 0).toLocaleString('pt-BR')}</td>
                     <td><span class="status-badge status-${payment.status === 'pago' ? 'ativo' : 'inadimplente'}">${payment.status === 'pago' ? 'Pago' : 'Pendente'}</span></td>
                 </tr>
             `;
@@ -319,8 +366,8 @@ const App = {
     },
 
     // ============ STATS ============
-    loadStats() {
-        const clients = Storage.getClients();
+    async loadStats() {
+        const clients = await Storage.getClients();
 
         const total = clients.length;
         const active = clients.filter(c => c.status === 'ativo').length;
@@ -346,6 +393,12 @@ const App = {
 
     renderPlanDistribution(clients) {
         const container = document.getElementById('planDistribution');
+
+        if (clients.length === 0) {
+            container.innerHTML = '<p style="color: var(--gray); padding: 2rem; text-align: center;">Nenhum cliente cadastrado</p>';
+            return;
+        }
+
         const distribution = clients.reduce((acc, c) => {
             acc[c.plan] = (acc[c.plan] || 0) + 1;
             return acc;
@@ -372,25 +425,25 @@ const App = {
     },
 
     // ============ CLIENT MODAL ============
-    openClientModal(clientId = null) {
+    async openClientModal(clientId = null) {
         const modal = document.getElementById('clientModal');
         modal.classList.add('active');
 
         if (clientId) {
-            const client = Storage.getClientById(clientId);
+            const client = await Storage.getClientById(clientId);
             if (client) {
                 document.getElementById('modalTitle').textContent = 'Editar Cliente';
                 document.getElementById('clientId').value = client.id;
                 document.getElementById('clientName').value = client.name;
-                document.getElementById('clientEmail').value = client.email;
-                document.getElementById('clientPhone').value = client.phone;
-                document.getElementById('clientCompany').value = client.company;
+                document.getElementById('clientEmail').value = client.email || '';
+                document.getElementById('clientPhone').value = client.phone || '';
+                document.getElementById('clientCompany').value = client.company || '';
                 document.getElementById('clientPlan').value = client.plan;
-                document.getElementById('clientRailwayUrl').value = client.railwayUrl;
-                document.getElementById('clientGithubRepo').value = client.githubRepo;
+                document.getElementById('clientRailwayUrl').value = client.railway_url || client.railwayUrl || '';
+                document.getElementById('clientGithubRepo').value = client.github_repo || client.githubRepo || '';
                 document.getElementById('clientStatus').value = client.status;
-                document.getElementById('clientInstallDate').value = client.installDate;
-                document.getElementById('clientSetupFee').value = client.setupFee;
+                document.getElementById('clientInstallDate').value = client.install_date || client.installDate || '';
+                document.getElementById('clientSetupFee').value = client.setup_fee || client.setupFee || 0;
                 document.getElementById('clientNotes').value = client.notes || '';
             }
         } else {
@@ -405,7 +458,7 @@ const App = {
         document.getElementById('clientModal').classList.remove('active');
     },
 
-    saveClient() {
+    async saveClient() {
         const id = document.getElementById('clientId').value;
         const clientData = {
             name: document.getElementById('clientName').value,
@@ -413,47 +466,53 @@ const App = {
             phone: document.getElementById('clientPhone').value,
             company: document.getElementById('clientCompany').value,
             plan: document.getElementById('clientPlan').value,
-            railwayUrl: document.getElementById('clientRailwayUrl').value,
-            githubRepo: document.getElementById('clientGithubRepo').value,
+            railway_url: document.getElementById('clientRailwayUrl').value,
+            github_repo: document.getElementById('clientGithubRepo').value,
             status: document.getElementById('clientStatus').value,
-            installDate: document.getElementById('clientInstallDate').value,
-            setupFee: parseInt(document.getElementById('clientSetupFee').value),
+            install_date: document.getElementById('clientInstallDate').value,
+            setup_fee: parseFloat(document.getElementById('clientSetupFee').value) || 0,
+            monthly_fee: SETTINGS.plans[document.getElementById('clientPlan').value]?.monthlyPrice || 0,
             notes: document.getElementById('clientNotes').value
         };
 
-        if (id) {
-            Storage.updateClient(id, clientData);
-        } else {
-            Storage.addClient(clientData);
+        try {
+            if (id) {
+                await Storage.updateClient(id, clientData);
+            } else {
+                await Storage.addClient(clientData);
 
-            // Register setup payment if applicable
-            if (clientData.setupFee > 0) {
-                Storage.addPayment({
-                    clientName: clientData.name,
-                    type: 'Setup',
-                    amount: clientData.setupFee,
-                    status: 'pago',
-                    date: clientData.installDate
-                });
+                // Register setup payment if applicable
+                if (clientData.setup_fee > 0) {
+                    await Storage.addPayment({
+                        client_name: clientData.name,
+                        type: 'Setup',
+                        amount: clientData.setup_fee,
+                        status: 'pago',
+                        date: clientData.install_date
+                    });
+                }
             }
-        }
 
-        this.closeModal();
-        this.loadClients();
-        this.loadDashboard();
-        alert('✅ Cliente salvo com sucesso!');
+            this.closeModal();
+            await this.loadClients();
+            await this.loadDashboard();
+            alert('✅ Cliente salvo com sucesso!');
+        } catch (error) {
+            console.error('Erro ao salvar cliente:', error);
+            alert('❌ Erro ao salvar cliente. Verifique o console.');
+        }
     },
 
     editClient(id) {
         this.openClientModal(id);
     },
 
-    deleteClient(id) {
-        const client = Storage.getClientById(id);
-        if (confirm(`⚠️ Tem certeza que deseja excluir o cliente "${client.name}"?`)) {
-            Storage.deleteClient(id);
-            this.loadClients();
-            this.loadDashboard();
+    async deleteClient(id) {
+        const client = await Storage.getClientById(id);
+        if (client && confirm(`⚠️ Tem certeza que deseja excluir o cliente "${client.name}"?`)) {
+            await Storage.deleteClient(id);
+            await this.loadClients();
+            await this.loadDashboard();
         }
     },
 
@@ -471,6 +530,7 @@ const App = {
     },
 
     getNextPaymentDate(installDate) {
+        if (!installDate) return null;
         const install = new Date(installDate);
         const today = new Date();
         const dayOfMonth = install.getDate();
@@ -485,6 +545,7 @@ const App = {
     },
 
     getDaysUntil(dateString) {
+        if (!dateString) return 0;
         const target = new Date(dateString);
         const today = new Date();
         const diff = target - today;
@@ -495,6 +556,7 @@ const App = {
         const labels = {
             ativo: 'Ativo',
             teste: 'Em Teste',
+            inativo: 'Inativo',
             inadimplente: 'Inadimplente',
             cancelado: 'Cancelado'
         };
