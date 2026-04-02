@@ -356,7 +356,7 @@
                 </div>
             </div>
 
-            <!-- Finance, Stats, Setup Views permanecem iguais por enquanto -->
+            <!-- Finance View -->
             <div id="financeView" class="view">
                 <div class="page-header">
                     <div class="header-left">
@@ -364,7 +364,107 @@
                         <p class="header-subtitle">Controle de receitas, custos e lucros</p>
                     </div>
                 </div>
-                <!-- Conteúdo financeiro será adicionado -->
+
+                <div class="stats-grid">
+                    <div class="stat-card stat-success">
+                        <div class="stat-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="1" x2="12" y2="23"></line>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Receita Mensal Total</span>
+                            <h3 id="totalMonthlyRevenue">R$ 0</h3>
+                            <span class="stat-change positive">Mensalidades ativas</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card stat-warning">
+                        <div class="stat-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Setup Este Mês</span>
+                            <h3 id="totalSetupRevenue">R$ 0</h3>
+                            <span class="stat-change neutral">Taxas únicas</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card stat-danger">
+                        <div class="stat-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Custos Railway</span>
+                            <h3 id="totalRailwayCosts">R$ 0</h3>
+                            <span class="stat-change neutral">Estimado/mês</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card stat-primary">
+                        <div class="stat-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                                <polyline points="17 6 23 6 23 12"></polyline>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Lucro Líquido</span>
+                            <h3 id="netProfit">R$ 0</h3>
+                            <span class="stat-change positive">Receita - Custos</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-card card-full">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            <h3>Histórico de Pagamentos</h3>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Cliente</th>
+                                        <th>Tipo</th>
+                                        <th>Valor</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="paymentsTableBody">
+                                    <tr class="empty-row">
+                                        <td colspan="5">
+                                            <div class="empty-state">
+                                                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                                </svg>
+                                                <p>Nenhum pagamento registrado</p>
+                                                <small>Os pagamentos aparecerão automaticamente quando você adicionar clientes</small>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="statsView" class="view">
@@ -374,17 +474,397 @@
                         <p class="header-subtitle">Métricas e KPIs do negócio</p>
                     </div>
                 </div>
-                <!-- Conteúdo de estatísticas será adicionado -->
+
+                <div class="dashboard-grid">
+                    <div class="dashboard-card">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                </svg>
+                                <h3>Resumo de Clientes</h3>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <div class="stats-list">
+                                <div class="stats-item">
+                                    <span>Total de clientes:</span>
+                                    <strong id="statsTotal">0</strong>
+                                </div>
+                                <div class="stats-item">
+                                    <span>Clientes ativos:</span>
+                                    <strong id="statsActive">0</strong>
+                                </div>
+                                <div class="stats-item">
+                                    <span>Em período de teste:</span>
+                                    <strong id="statsTest">0</strong>
+                                </div>
+                                <div class="stats-item">
+                                    <span>Inadimplentes:</span>
+                                    <strong id="statsOverdue">0</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-card">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                                    <polyline points="17 6 23 6 23 12"></polyline>
+                                </svg>
+                                <h3>Métricas de Conversão</h3>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <div class="stats-list">
+                                <div class="stats-item">
+                                    <span>Taxa de conversão (teste → ativo):</span>
+                                    <strong id="statsConversion">0%</strong>
+                                </div>
+                                <div class="stats-item">
+                                    <span>Churn rate mensal:</span>
+                                    <strong id="statsChurn">0%</strong>
+                                </div>
+                                <div class="stats-item">
+                                    <span>Ticket médio mensal:</span>
+                                    <strong id="statsAvgTicket">R$ 0</strong>
+                                </div>
+                                <div class="stats-item">
+                                    <span>LTV médio por cliente:</span>
+                                    <strong id="statsLTV">R$ 0</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-card card-full">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="14" width="7" height="7"></rect>
+                                    <rect x="3" y="14" width="7" height="7"></rect>
+                                </svg>
+                                <h3>Distribuição por Plano</h3>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <div class="performance-grid">
+                                <div class="performance-item">
+                                    <div class="performance-label">
+                                        <span class="dot dot-cyan"></span>
+                                        Plano Básico (R$ 97/mês)
+                                    </div>
+                                    <strong class="performance-value" id="planBasicCount">0 clientes</strong>
+                                </div>
+                                <div class="performance-item">
+                                    <div class="performance-label">
+                                        <span class="dot dot-lime"></span>
+                                        Plano Profissional (R$ 147/mês)
+                                    </div>
+                                    <strong class="performance-value" id="planProCount">0 clientes</strong>
+                                </div>
+                                <div class="performance-item">
+                                    <div class="performance-label">
+                                        <span class="dot dot-orange"></span>
+                                        Plano Enterprise (R$ 297/mês)
+                                    </div>
+                                    <strong class="performance-value" id="planEnterpriseCount">0 clientes</strong>
+                                </div>
+                                <div class="performance-item">
+                                    <div class="performance-label">
+                                        <span class="dot dot-purple"></span>
+                                        MRR Total
+                                    </div>
+                                    <strong class="performance-value" id="totalMRR">R$ 0</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="setupView" class="view">
                 <div class="page-header">
                     <div class="header-left">
                         <h1>Novo Setup</h1>
-                        <p class="header-subtitle">Guia passo a passo para configurar novo cliente</p>
+                        <p class="header-subtitle">Guia completo passo a passo (30 min)</p>
                     </div>
                 </div>
-                <!-- Conteúdo de setup permanece igual -->
+
+                <div class="setup-guide">
+                    <div class="setup-intro-card">
+                        <h3>🚀 O que você vai fazer:</h3>
+                        <p>Criar uma cópia do ContatoSync exclusiva para um novo cliente e configurar para funcionar com o WhatsApp dele.</p>
+                        <div class="setup-requirements">
+                            <h4>Você vai precisar:</h4>
+                            <ul>
+                                <li>✅ Conta GitHub (grátis)</li>
+                                <li>✅ Conta Railway (grátis)</li>
+                                <li>✅ Número do WhatsApp do cliente</li>
+                                <li>✅ Email do cliente (para criar conta Google Cloud)</li>
+                                <li>⏱️ 30 minutos do seu tempo</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="setup-steps-container">
+                        <div class="setup-step-card">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h3>Criar Repositório no GitHub</h3>
+                                <p class="step-description">Fazer uma cópia do código para o novo cliente</p>
+                                <div class="step-instructions">
+                                    <ol>
+                                        <li>Abra <a href="https://github.com/albertonpf-jpg/contatosync" target="_blank">github.com/albertonpf-jpg/contatosync</a></li>
+                                        <li>Clique no botão verde <strong>"Use this template"</strong></li>
+                                        <li>Selecione <strong>"Create a new repository"</strong></li>
+                                        <li>Nome do repositório: <code>contatosync-[nome-cliente]</code>
+                                            <br><small>Exemplo: contatosync-mariasil va</small>
+                                        </li>
+                                        <li>Marque como <strong>Private</strong> (privado)</li>
+                                        <li>Clique em <strong>"Create repository"</strong></li>
+                                    </ol>
+                                    <div class="step-result">
+                                        ✅ <strong>Resultado:</strong> Repositório criado em github.com/albertonpf-jpg/contatosync-[cliente]
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setup-step-card">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h3>Deploy no Railway</h3>
+                                <p class="step-description">Colocar o sistema online (servidor gratuito)</p>
+                                <div class="step-instructions">
+                                    <ol>
+                                        <li>Acesse <a href="https://railway.app" target="_blank">railway.app</a> e faça login com GitHub</li>
+                                        <li>Clique em <strong>"New Project"</strong></li>
+                                        <li>Selecione <strong>"Deploy from GitHub repo"</strong></li>
+                                        <li>Procure e selecione: <strong>contatosync-[nome-cliente]</strong></li>
+                                        <li>Aguarde 2-3 minutos (Railway vai instalar automaticamente)</li>
+                                        <li>Quando aparecer "Success", clique no projeto</li>
+                                        <li>Vá em <strong>Settings</strong> → <strong>Generate Domain</strong></li>
+                                        <li>Copie a URL gerada (algo como: projeto.up.railway.app)</li>
+                                    </ol>
+                                    <div class="step-result">
+                                        ✅ <strong>Resultado:</strong> Sistema online em https://xxxxx.up.railway.app
+                                        <br><small>⚠️ Guarde essa URL! Você vai precisar dela!</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setup-step-card">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h3>Criar Projeto Google Cloud</h3>
+                                <p class="step-description">Conectar com Google Contacts do cliente</p>
+                                <div class="step-instructions">
+                                    <ol>
+                                        <li>Acesse <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a></li>
+                                        <li>Clique em <strong>"Selecionar projeto"</strong> → <strong>"Novo projeto"</strong></li>
+                                        <li>Nome do projeto: <code>ContatoSync [Nome Cliente]</code></li>
+                                        <li>Clique em <strong>"Criar"</strong></li>
+                                        <li>Aguarde 10-20 segundos até aparecer notificação</li>
+                                        <li>Clique em <strong>"Selecionar projeto"</strong> e escolha o criado</li>
+                                    </ol>
+                                    <div class="step-note">
+                                        💡 <strong>Dica:</strong> Use o email do cliente para criar o projeto (peça para ele te dar acesso como editor)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setup-step-card">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <h3>Ativar People API</h3>
+                                <p class="step-description">Permitir que o sistema salve contatos no Google</p>
+                                <div class="step-instructions">
+                                    <ol>
+                                        <li>No Google Cloud Console, procure por <strong>"People API"</strong> na barra de busca</li>
+                                        <li>Clique em <strong>"People API"</strong> nos resultados</li>
+                                        <li>Clique no botão azul <strong>"Ativar"</strong></li>
+                                        <li>Aguarde 5-10 segundos (vai ativar automaticamente)</li>
+                                    </ol>
+                                    <div class="step-result">
+                                        ✅ <strong>Resultado:</strong> People API ativada
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setup-step-card">
+                            <div class="step-number">5</div>
+                            <div class="step-content">
+                                <h3>Criar Credenciais OAuth 2.0</h3>
+                                <p class="step-description">Gerar chaves de acesso ao Google</p>
+                                <div class="step-instructions">
+                                    <ol>
+                                        <li>No menu esquerdo, clique em <strong>"Credenciais"</strong></li>
+                                        <li>Clique em <strong>"Criar credenciais"</strong> → <strong>"ID do cliente OAuth"</strong></li>
+                                        <li>Se pedir para configurar tela de consentimento:
+                                            <ul>
+                                                <li>Selecione <strong>"Externo"</strong></li>
+                                                <li>Nome do app: <strong>ContatoSync</strong></li>
+                                                <li>Email de suporte: email do cliente</li>
+                                                <li>Clique em <strong>"Salvar e continuar"</strong> 3 vezes</li>
+                                                <li>Volte para <strong>"Credenciais"</strong></li>
+                                            </ul>
+                                        </li>
+                                        <li>Tipo de aplicativo: <strong>"Aplicativo da Web"</strong></li>
+                                        <li>Nome: <strong>ContatoSync Web</strong></li>
+                                        <li>URIs de redirecionamento autorizados:
+                                            <br>Adicione a URL do Railway + <code>/auth/google/callback</code>
+                                            <br><small>Exemplo: https://xxxxx.up.railway.app/auth/google/callback</small>
+                                        </li>
+                                        <li>Clique em <strong>"Criar"</strong></li>
+                                        <li>Copie o <strong>ID do cliente</strong> e <strong>Chave secreta do cliente</strong></li>
+                                    </ol>
+                                    <div class="step-result">
+                                        ✅ <strong>Guarde essas 2 informações:</strong>
+                                        <br>• Client ID (parece com: 123456-abc.apps.googleusercontent.com)
+                                        <br>• Client Secret (parece com: GOCSPX-abc123)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setup-step-card">
+                            <div class="step-number">6</div>
+                            <div class="step-content">
+                                <h3>Configurar Variáveis no Railway</h3>
+                                <p class="step-description">Conectar tudo</p>
+                                <div class="step-instructions">
+                                    <ol>
+                                        <li>Volte para o Railway (railway.app)</li>
+                                        <li>Abra o projeto do cliente</li>
+                                        <li>Clique em <strong>"Variables"</strong></li>
+                                        <li>Clique em <strong>"Raw Editor"</strong></li>
+                                        <li>Cole este template e preencha os dados:
+                                            <pre><code>GOOGLE_CLIENT_ID=cole_aqui_o_client_id_do_passo_5
+GOOGLE_CLIENT_SECRET=cole_aqui_o_client_secret_do_passo_5
+GOOGLE_REDIRECT_URI=https://sua-url-railway.up.railway.app/auth/google/callback
+PORT=8080
+SESSION_SECRET=gere_uma_senha_aleatoria_de_32_caracteres</code></pre>
+                                        </li>
+                                        <li>Clique em <strong>"Update Variables"</strong></li>
+                                        <li>Aguarde 1-2 minutos (Railway vai reiniciar automaticamente)</li>
+                                    </ol>
+                                    <div class="step-note">
+                                        💡 <strong>Para gerar SESSION_SECRET:</strong> Use um gerador de senhas ou digite 32 caracteres aleatórios
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setup-step-card">
+                            <div class="step-number">7</div>
+                            <div class="step-content">
+                                <h3>Conectar WhatsApp do Cliente</h3>
+                                <p class="step-description">Fazer a sincronização funcionar</p>
+                                <div class="step-instructions">
+                                    <ol>
+                                        <li>Abra a URL do Railway no navegador</li>
+                                        <li>Você verá uma página com QR Code do WhatsApp</li>
+                                        <li>Peça para o cliente abrir o WhatsApp dele</li>
+                                        <li>WhatsApp → Menu (3 pontos) → <strong>"Aparelhos conectados"</strong></li>
+                                        <li>Clique em <strong>"Conectar um aparelho"</strong></li>
+                                        <li>Escaneie o QR Code da tela</li>
+                                        <li>Aguarde 5-10 segundos</li>
+                                        <li>Deve aparecer "WhatsApp Conectado ✅"</li>
+                                    </ol>
+                                    <div class="step-result">
+                                        ✅ <strong>Resultado:</strong> WhatsApp conectado e sincronizando
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setup-step-card">
+                            <div class="step-number">8</div>
+                            <div class="step-content">
+                                <h3>Conectar Google Contacts</h3>
+                                <p class="step-description">Autorizar salvamento de contatos</p>
+                                <div class="step-instructions">
+                                    <ol>
+                                        <li>Na mesma página, clique em <strong>"Conectar Google"</strong></li>
+                                        <li>Vai abrir tela de login do Google</li>
+                                        <li>Faça login com a conta Google do cliente</li>
+                                        <li>Vai aparecer aviso "Google não verificou este app"</li>
+                                        <li>Clique em <strong>"Avançado"</strong> → <strong>"Ir para ContatoSync (não seguro)"</strong></li>
+                                        <li>Marque as permissões e clique em <strong>"Continuar"</strong></li>
+                                        <li>Deve redirecionar e aparecer "Google Conectado ✅"</li>
+                                    </ol>
+                                    <div class="step-note">
+                                        ⚠️ <strong>Importante:</strong> O aviso de "não verificado" é normal. É porque o app não passou pela verificação do Google (que custa US$ 15-220 e demora 4-6 semanas). O app é seguro!
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setup-step-card success-card">
+                            <div class="step-number">✓</div>
+                            <div class="step-content">
+                                <h3>Setup Completo!</h3>
+                                <p class="step-description">Agora vem a parte final</p>
+                                <div class="step-instructions">
+                                    <h4>Teste se está funcionando:</h4>
+                                    <ol>
+                                        <li>Peça para alguém enviar uma mensagem no WhatsApp do cliente</li>
+                                        <li>Aguarde 10-30 segundos</li>
+                                        <li>Abra o Google Contacts do cliente (contacts.google.com)</li>
+                                        <li>Verifique se o contato foi salvo automaticamente</li>
+                                    </ol>
+
+                                    <h4>Adicione o cliente no painel:</h4>
+                                    <ol>
+                                        <li>Volte para a aba <strong>"Clientes"</strong> deste painel</li>
+                                        <li>Clique em <strong>"Novo Cliente"</strong></li>
+                                        <li>Preencha todos os dados:
+                                            <ul>
+                                                <li>Nome, email, WhatsApp</li>
+                                                <li>Plano contratado</li>
+                                                <li>URL do Railway</li>
+                                                <li>Data de instalação (hoje)</li>
+                                                <li>Valor do setup cobrado</li>
+                                            </ul>
+                                        </li>
+                                        <li>Clique em <strong>"Salvar Cliente"</strong></li>
+                                    </ol>
+
+                                    <div class="step-result success">
+                                        🎉 <strong>Parabéns! Cliente configurado e funcionando!</strong>
+                                        <br><br>
+                                        <strong>Próximos passos:</strong>
+                                        <br>• Explique para o cliente como funciona
+                                        <br>• Envie a URL do Railway para ele acessar o painel
+                                        <br>• Configure cobrança recorrente (PagSeguro, Mercado Pago, etc)
+                                        <br>• Monitore o Railway para não exceder o plano gratuito ($5/mês)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setup-help-card">
+                        <h3>❓ Precisa de Ajuda?</h3>
+                        <p>Se algo der errado ou tiver dúvidas:</p>
+                        <ul>
+                            <li>📖 Leia o arquivo <code>REPLICACAO-RAPIDA.md</code> no repositório</li>
+                            <li>🔍 Verifique os logs no Railway (Deployments → View Logs)</li>
+                            <li>💬 Entre em contato: alberto@plannedmidia.com.br</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </main>
     </div>

@@ -1174,6 +1174,336 @@ body::after {
 }
 
 /* ===================================
+   STATS LIST
+   =================================== */
+.stats-list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+}
+
+.stats-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: calc(var(--space) * 2) 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stats-item:last-child {
+    border-bottom: none;
+}
+
+.stats-item span {
+    color: var(--gray-light);
+    font-size: 0.9375rem;
+}
+
+.stats-item strong {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--white);
+    font-family: var(--font-display);
+}
+
+/* ===================================
+   SETUP GUIDE
+   =================================== */
+.setup-guide {
+    max-width: 1000px;
+}
+
+.setup-intro-card {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.1) 0%, rgba(180, 255, 57, 0.05) 100%);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    border-radius: var(--radius-lg);
+    padding: calc(var(--space) * 4);
+    margin-bottom: calc(var(--space) * 4);
+}
+
+.setup-intro-card h3 {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--cyan);
+    margin-bottom: calc(var(--space) * 2);
+}
+
+.setup-intro-card p {
+    font-size: 1.0625rem;
+    color: var(--gray-light);
+    margin-bottom: calc(var(--space) * 3);
+}
+
+.setup-requirements {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    padding: calc(var(--space) * 3);
+}
+
+.setup-requirements h4 {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: calc(var(--space) * 2);
+}
+
+.setup-requirements ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1.5);
+}
+
+.setup-requirements li {
+    font-size: 0.9375rem;
+    color: var(--gray-light);
+}
+
+.setup-steps-container {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+}
+
+.setup-step-card {
+    background: linear-gradient(135deg, var(--dark-800) 0%, var(--dark-700) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
+    padding: calc(var(--space) * 4);
+    display: flex;
+    gap: calc(var(--space) * 3);
+    position: relative;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.setup-step-card.success-card {
+    border-color: rgba(180, 255, 57, 0.3);
+    background: linear-gradient(135deg, rgba(180, 255, 57, 0.08) 0%, var(--dark-700) 100%);
+}
+
+.step-number {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--lime) 100%);
+    color: var(--dark);
+    font-size: 1.75rem;
+    font-weight: 900;
+    font-family: var(--font-display);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 16px rgba(0, 217, 255, 0.3);
+}
+
+.success-card .step-number {
+    background: linear-gradient(135deg, var(--lime) 0%, #a0e830 100%);
+    font-size: 2rem;
+}
+
+.step-content {
+    flex: 1;
+}
+
+.step-content h3 {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--white);
+    margin-bottom: calc(var(--space) * 1);
+}
+
+.step-description {
+    color: var(--gray-light);
+    font-size: 1rem;
+    margin-bottom: calc(var(--space) * 3);
+}
+
+.step-instructions {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-md);
+    padding: calc(var(--space) * 3);
+}
+
+.step-instructions h4 {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: calc(var(--space) * 2);
+    margin-top: calc(var(--space) * 3);
+}
+
+.step-instructions h4:first-child {
+    margin-top: 0;
+}
+
+.step-instructions ol {
+    padding-left: calc(var(--space) * 3);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+}
+
+.step-instructions li {
+    color: var(--white);
+    font-size: 0.9375rem;
+    line-height: 1.7;
+}
+
+.step-instructions ul {
+    margin-top: calc(var(--space) * 1.5);
+    padding-left: calc(var(--space) * 3);
+}
+
+.step-instructions ul li {
+    color: var(--gray-light);
+    font-size: 0.875rem;
+}
+
+.step-instructions code {
+    background: rgba(0, 217, 255, 0.1);
+    border: 1px solid rgba(0, 217, 255, 0.2);
+    padding: calc(var(--space) * 0.5) calc(var(--space) * 1);
+    border-radius: calc(var(--radius-sm) * 0.6);
+    color: var(--cyan);
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+}
+
+.step-instructions pre {
+    background: var(--dark);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    padding: calc(var(--space) * 2);
+    margin: calc(var(--space) * 2) 0;
+    overflow-x: auto;
+}
+
+.step-instructions pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--white);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+}
+
+.step-instructions a {
+    color: var(--cyan);
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.step-instructions a:hover {
+    color: var(--lime);
+    text-decoration: underline;
+}
+
+.step-instructions strong {
+    color: var(--white);
+    font-weight: 700;
+}
+
+.step-instructions small {
+    display: block;
+    color: var(--gray);
+    font-size: 0.8125rem;
+    margin-top: calc(var(--space) * 0.75);
+}
+
+.step-result {
+    margin-top: calc(var(--space) * 3);
+    padding: calc(var(--space) * 2.5);
+    background: rgba(0, 217, 255, 0.08);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    border-left: 4px solid var(--cyan);
+    border-radius: var(--radius-sm);
+    color: var(--white);
+    font-size: 0.9375rem;
+}
+
+.step-result.success {
+    background: rgba(180, 255, 57, 0.08);
+    border-color: rgba(180, 255, 57, 0.3);
+    border-left-color: var(--lime);
+}
+
+.step-result strong {
+    font-weight: 700;
+    color: var(--cyan);
+}
+
+.step-result.success strong {
+    color: var(--lime);
+}
+
+.step-note {
+    margin-top: calc(var(--space) * 3);
+    padding: calc(var(--space) * 2.5);
+    background: rgba(255, 149, 0, 0.08);
+    border: 1px solid rgba(255, 149, 0, 0.3);
+    border-left: 4px solid var(--orange);
+    border-radius: var(--radius-sm);
+    color: var(--white);
+    font-size: 0.9375rem;
+}
+
+.step-note strong {
+    color: var(--orange);
+    font-weight: 700;
+}
+
+.setup-help-card {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(168, 85, 247, 0.05) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: var(--radius-lg);
+    padding: calc(var(--space) * 4);
+    margin-top: calc(var(--space) * 4);
+}
+
+.setup-help-card h3 {
+    font-family: var(--font-display);
+    font-size: 1.375rem;
+    font-weight: 800;
+    color: var(--purple);
+    margin-bottom: calc(var(--space) * 2);
+}
+
+.setup-help-card p {
+    color: var(--gray-light);
+    margin-bottom: calc(var(--space) * 2);
+}
+
+.setup-help-card ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1.5);
+}
+
+.setup-help-card li {
+    color: var(--white);
+    font-size: 0.9375rem;
+}
+
+.setup-help-card code {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    padding: calc(var(--space) * 0.5) calc(var(--space) * 1);
+    border-radius: calc(var(--radius-sm) * 0.6);
+    color: var(--purple);
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+}
+
+/* ===================================
    RESPONSIVE
    =================================== */
 @media (max-width: 1280px) {
