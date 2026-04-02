@@ -5,3 +5,6 @@ config/google_token.json
 config/icloud_creds.json
 config/sequence.json
 *.log
+
+# Vercel
+.vercel
