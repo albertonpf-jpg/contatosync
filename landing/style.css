@@ -6,6 +6,11 @@
     box-sizing: border-box;
 }
 
+html, body {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
 :root {
     --dark: #080814;
     --dark-800: #0d0d1f;
@@ -1513,5 +1518,78 @@ section h2::after {
 
     .stat-destaque {
         font-size: 4rem;
+    }
+
+    /* Prevenir overflow horizontal em mobile */
+    h1, h2, h3, h4, h5, h6, p {
+        max-width: 100%;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    img, svg {
+        max-width: 100%;
+        height: auto;
+    }
+
+    .container {
+        max-width: 100%;
+    }
+
+    /* Ajustar cards e elementos que podem vazar */
+    .mockup-card,
+    .flow-step,
+    .feature-card,
+    .pricing-card,
+    .testimonial-card,
+    .problema-card,
+    .problema-stat {
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    /* Ajustar botões em mobile */
+    .btn-primary,
+    .btn-secondary,
+    .btn-outline {
+        width: 100%;
+        max-width: 100%;
+        font-size: 1rem;
+        padding: 1rem 1.5rem;
+    }
+
+    /* Hero ajustes */
+    .hero-badge,
+    .showcase-label {
+        font-size: 0.75rem;
+    }
+
+    .whatsapp-showcase h3 {
+        font-size: 1.25rem;
+    }
+
+    .whatsapp-showcase p {
+        font-size: 0.875rem;
+    }
+
+    /* Ajustar títulos de seções */
+    .problema-card h3 {
+        font-size: 1.25rem;
+    }
+
+    .feature-card h3 {
+        font-size: 1.25rem;
+    }
+
+    /* Grid de problemas */
+    .problema-icon {
+        width: 60px;
+        height: 60px;
+        font-size: 2rem;
+    }
+
+    /* Stats */
+    .stat-label {
+        font-size: 0.875rem;
     }
 }

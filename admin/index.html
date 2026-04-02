@@ -119,6 +119,21 @@
                     </div>
                 </div>
 
+                <!-- Aviso de dados salvos localmente -->
+                <div style="background: rgba(255, 149, 0, 0.1); border: 1px solid rgba(255, 149, 0, 0.3); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <div style="flex: 1;">
+                        <p style="margin: 0; color: #ffd699; font-size: 0.9rem;">
+                            <strong>Dados salvos localmente:</strong> Todos os dados ficam salvos no navegador (localStorage).
+                            Se ver dados antigos/fictícios, abra o Console do navegador (F12) e execute: <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace;">localStorage.clear()</code> depois recarregue a página.
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Stats Grid -->
                 <div class="stats-grid">
                     <div class="stat-card stat-primary">
