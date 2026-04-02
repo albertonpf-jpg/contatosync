@@ -1,0 +1,28 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "npm install --no-package-lock"
+  },
+  "deploy": {
+    "startCommand": "npm start",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 100,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  },
+  "environments": {
+    "production": {
+      "variables": {
+        "PORT": "3000",
+        "CONTACT_PREFIX": "Contato Zap",
+        "CONTACT_SEQ_START": "1",
+        "BATCH_SIZE": "10",
+        "BATCH_DELAY_MS": "2000",
+        "GOOGLE_CLIENT_ID": "",
+        "GOOGLE_CLIENT_SECRET": "",
+        "GOOGLE_REDIRECT_URI": ""
+      }
+    }
+  }
+}
