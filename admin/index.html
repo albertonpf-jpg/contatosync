@@ -133,7 +133,7 @@
                         <div class="stat-info">
                             <span class="stat-label">Clientes Ativos</span>
                             <h3 id="totalClients">0</h3>
-                            <span class="stat-change positive">+12% este mês</span>
+                            <span class="stat-change neutral">Adicione clientes</span>
                         </div>
                     </div>
 
@@ -147,7 +147,7 @@
                         <div class="stat-info">
                             <span class="stat-label">Receita Mensal</span>
                             <h3 id="monthlyRevenue">R$ 0</h3>
-                            <span class="stat-change positive">+8% vs. mês anterior</span>
+                            <span class="stat-change neutral">Mensalidades ativas</span>
                         </div>
                     </div>
 
@@ -160,7 +160,7 @@
                         <div class="stat-info">
                             <span class="stat-label">Setup Este Mês</span>
                             <h3 id="setupRevenue">R$ 0</h3>
-                            <span class="stat-change positive">3 novos setups</span>
+                            <span class="stat-change neutral">Taxas de setup</span>
                         </div>
                     </div>
 
@@ -257,28 +257,28 @@
                                         <span class="dot dot-cyan"></span>
                                         Novos Clientes
                                     </div>
-                                    <strong class="performance-value">12</strong>
+                                    <strong class="performance-value" id="newClientsMonth">0</strong>
                                 </div>
                                 <div class="performance-item">
                                     <div class="performance-label">
                                         <span class="dot dot-lime"></span>
                                         Taxa de Conversão
                                     </div>
-                                    <strong class="performance-value">68%</strong>
+                                    <strong class="performance-value" id="conversionRate">0%</strong>
                                 </div>
                                 <div class="performance-item">
                                     <div class="performance-label">
                                         <span class="dot dot-orange"></span>
                                         MRR Crescimento
                                     </div>
-                                    <strong class="performance-value">+R$ 1.2k</strong>
+                                    <strong class="performance-value" id="mrrGrowth">R$ 0</strong>
                                 </div>
                                 <div class="performance-item">
                                     <div class="performance-label">
                                         <span class="dot dot-purple"></span>
                                         Churn Rate
                                     </div>
-                                    <strong class="performance-value">2.3%</strong>
+                                    <strong class="performance-value" id="churnRate">0%</strong>
                                 </div>
                             </div>
                         </div>
@@ -601,16 +601,19 @@
                 <div class="setup-guide">
                     <div class="setup-intro-card">
                         <h3>🚀 O que você vai fazer:</h3>
-                        <p>Criar uma cópia do ContatoSync exclusiva para um novo cliente e configurar para funcionar com o WhatsApp dele.</p>
+                        <p>Configurar o ContatoSync na estrutura DO CLIENTE (GitHub dele + Railway dele) para funcionar com o WhatsApp dele.</p>
                         <div class="setup-requirements">
-                            <h4>Você vai precisar:</h4>
+                            <h4>O CLIENTE vai precisar ter:</h4>
                             <ul>
-                                <li>✅ Conta GitHub (grátis)</li>
-                                <li>✅ Conta Railway (grátis)</li>
-                                <li>✅ Número do WhatsApp do cliente</li>
-                                <li>✅ Email do cliente (para criar conta Google Cloud)</li>
-                                <li>⏱️ 30 minutos do seu tempo</li>
+                                <li>✅ Conta GitHub (você vai criar no nome dele - grátis)</li>
+                                <li>✅ Conta Railway (você vai criar no nome dele - grátis)</li>
+                                <li>✅ Conta Google Cloud (você vai criar no email dele - grátis)</li>
+                                <li>✅ Número do WhatsApp (do cliente)</li>
+                                <li>⏱️ 30 minutos do seu tempo para fazer o setup</li>
                             </ul>
+                            <p style="margin-top: 16px; color: var(--orange); font-weight: 600;">
+                                ⚠️ IMPORTANTE: Tudo será criado nas contas DO CLIENTE, não nas suas!
+                            </p>
                         </div>
                     </div>
 
@@ -618,21 +621,31 @@
                         <div class="setup-step-card">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <h3>Criar Repositório no GitHub</h3>
-                                <p class="step-description">Fazer uma cópia do código para o novo cliente</p>
+                                <h3>Criar Conta GitHub do Cliente</h3>
+                                <p class="step-description">Criar conta e repositório no nome DO CLIENTE</p>
                                 <div class="step-instructions">
+                                    <h4>Criar conta GitHub do cliente:</h4>
+                                    <ol>
+                                        <li>Acesse <a href="https://github.com/signup" target="_blank">github.com/signup</a></li>
+                                        <li>Use o <strong>email do cliente</strong> para criar a conta</li>
+                                        <li>Username: <code>nome-do-cliente</code> ou <code>empresa-cliente</code></li>
+                                        <li>Senha: Anote a senha que o cliente escolher</li>
+                                        <li>Verifique o email do cliente e confirme a conta</li>
+                                    </ol>
+
+                                    <h4>Criar repositório ContatoSync:</h4>
                                     <ol>
                                         <li>Abra <a href="https://github.com/albertonpf-jpg/contatosync" target="_blank">github.com/albertonpf-jpg/contatosync</a></li>
                                         <li>Clique no botão verde <strong>"Use this template"</strong></li>
                                         <li>Selecione <strong>"Create a new repository"</strong></li>
-                                        <li>Nome do repositório: <code>contatosync-[nome-cliente]</code>
-                                            <br><small>Exemplo: contatosync-mariasil va</small>
-                                        </li>
+                                        <li>⚠️ IMPORTANTE: Faça login com a <strong>conta DO CLIENTE</strong> que você acabou de criar</li>
+                                        <li>Nome do repositório: <code>contatosync</code> (pode usar nome simples)</li>
                                         <li>Marque como <strong>Private</strong> (privado)</li>
                                         <li>Clique em <strong>"Create repository"</strong></li>
                                     </ol>
                                     <div class="step-result">
-                                        ✅ <strong>Resultado:</strong> Repositório criado em github.com/albertonpf-jpg/contatosync-[cliente]
+                                        ✅ <strong>Resultado:</strong> Repositório criado em github.com/[usuario-do-cliente]/contatosync
+                                        <br><small>⚠️ Note que está na conta DO CLIENTE, não na sua!</small>
                                     </div>
                                 </div>
                             </div>
@@ -641,22 +654,30 @@
                         <div class="setup-step-card">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <h3>Deploy no Railway</h3>
-                                <p class="step-description">Colocar o sistema online (servidor gratuito)</p>
+                                <h3>Criar Conta Railway do Cliente</h3>
+                                <p class="step-description">Criar conta e fazer deploy no nome DO CLIENTE</p>
                                 <div class="step-instructions">
+                                    <h4>Criar conta Railway do cliente:</h4>
                                     <ol>
-                                        <li>Acesse <a href="https://railway.app" target="_blank">railway.app</a> e faça login com GitHub</li>
+                                        <li>Acesse <a href="https://railway.app" target="_blank">railway.app</a></li>
+                                        <li>Clique em <strong>"Login"</strong> → <strong>"Login with GitHub"</strong></li>
+                                        <li>⚠️ IMPORTANTE: Use a <strong>conta GitHub DO CLIENTE</strong> que você criou no passo 1</li>
+                                        <li>Autorize o Railway a acessar o GitHub</li>
+                                    </ol>
+
+                                    <h4>Fazer deploy do ContatoSync:</h4>
+                                    <ol>
                                         <li>Clique em <strong>"New Project"</strong></li>
                                         <li>Selecione <strong>"Deploy from GitHub repo"</strong></li>
-                                        <li>Procure e selecione: <strong>contatosync-[nome-cliente]</strong></li>
+                                        <li>Procure e selecione: <strong>contatosync</strong> (do cliente)</li>
                                         <li>Aguarde 2-3 minutos (Railway vai instalar automaticamente)</li>
                                         <li>Quando aparecer "Success", clique no projeto</li>
                                         <li>Vá em <strong>Settings</strong> → <strong>Generate Domain</strong></li>
-                                        <li>Copie a URL gerada (algo como: projeto.up.railway.app)</li>
+                                        <li>Copie a URL gerada (ex: contatosync-production.up.railway.app)</li>
                                     </ol>
                                     <div class="step-result">
                                         ✅ <strong>Resultado:</strong> Sistema online em https://xxxxx.up.railway.app
-                                        <br><small>⚠️ Guarde essa URL! Você vai precisar dela!</small>
+                                        <br><small>⚠️ Guarde essa URL! Está na conta Railway DO CLIENTE!</small>
                                     </div>
                                 </div>
                             </div>
@@ -665,19 +686,20 @@
                         <div class="setup-step-card">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <h3>Criar Projeto Google Cloud</h3>
-                                <p class="step-description">Conectar com Google Contacts do cliente</p>
+                                <h3>Criar Projeto Google Cloud do Cliente</h3>
+                                <p class="step-description">Criar projeto no email DO CLIENTE</p>
                                 <div class="step-instructions">
                                     <ol>
+                                        <li>⚠️ IMPORTANTE: Faça login no Google Console com o <strong>email DO CLIENTE</strong></li>
                                         <li>Acesse <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a></li>
                                         <li>Clique em <strong>"Selecionar projeto"</strong> → <strong>"Novo projeto"</strong></li>
-                                        <li>Nome do projeto: <code>ContatoSync [Nome Cliente]</code></li>
+                                        <li>Nome do projeto: <code>ContatoSync</code></li>
                                         <li>Clique em <strong>"Criar"</strong></li>
                                         <li>Aguarde 10-20 segundos até aparecer notificação</li>
-                                        <li>Clique em <strong>"Selecionar projeto"</strong> e escolha o criado</li>
+                                        <li>Clique em <strong>"Selecionar projeto"</strong> e escolha o ContatoSync</li>
                                     </ol>
                                     <div class="step-note">
-                                        💡 <strong>Dica:</strong> Use o email do cliente para criar o projeto (peça para ele te dar acesso como editor)
+                                        💡 <strong>Importante:</strong> O projeto Google Cloud DEVE estar no email do cliente para funcionar corretamente. Se você criar no seu email, os contatos vão para a SUA conta Google, não a do cliente!
                                     </div>
                                 </div>
                             </div>

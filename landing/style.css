@@ -1427,7 +1427,7 @@ section h2::after {
 
 @media (max-width: 640px) {
     .container, .footer-container {
-        padding: 0 28px;
+        padding: 0 20px;
     }
 
     .header {
@@ -1439,16 +1439,54 @@ section h2::after {
     }
 
     .hero {
-        padding: 120px 0 80px;
+        padding: 100px 0 60px;
     }
 
-    section {
-        padding: 80px 0;
+    .hero-grid {
+        grid-template-columns: 1fr;
+        gap: 40px;
+    }
+
+    .hero-content h1 {
+        font-size: 2rem;
+    }
+
+    .hero-text {
+        font-size: 1rem;
     }
 
     .hero-stats {
         flex-direction: column;
         gap: 2rem;
+        padding: 2rem 0;
+    }
+
+    .stat-big {
+        font-size: 2rem;
+    }
+
+    .whatsapp-showcase {
+        flex-direction: column;
+        text-align: center;
+        padding: calc(var(--space) * 3);
+    }
+
+    .whatsapp-icon-large {
+        width: 80px;
+        height: 80px;
+    }
+
+    .whatsapp-icon-large svg {
+        width: 48px;
+        height: 48px;
+    }
+
+    section {
+        padding: 60px 0;
+    }
+
+    section h2 {
+        font-size: 1.875rem;
     }
 
     .mockup-card,
@@ -1461,11 +1499,19 @@ section h2::after {
     }
 
     .cta-form-wrapper {
-        padding: 2.5rem;
+        padding: 2.5rem 2rem;
     }
 
     .footer-grid {
         grid-template-columns: 1fr;
         gap: 3rem;
+    }
+
+    .problema-numero {
+        font-size: 3rem;
+    }
+
+    .stat-destaque {
+        font-size: 4rem;
     }
 }
