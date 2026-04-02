@@ -11,7 +11,11 @@
     <div id="loginScreen" class="login-screen">
         <div class="login-box">
             <div class="login-logo">
-                <span class="logo-icon">📱</span>
+                <span class="logo-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </span>
                 <h1>ContatoSync Admin</h1>
             </div>
             <form id="loginForm">
@@ -27,24 +31,51 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-logo">
-                <span class="logo-icon">📱</span>
+                <span class="logo-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </span>
                 <span>ContatoSync</span>
             </div>
             <nav class="sidebar-nav">
                 <a href="#" class="nav-item active" data-view="dashboard">
-                    <span>📊</span> Dashboard
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    Dashboard
                 </a>
                 <a href="#" class="nav-item" data-view="clients">
-                    <span>👥</span> Clientes
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    Clientes
                 </a>
                 <a href="#" class="nav-item" data-view="finance">
-                    <span>💰</span> Financeiro
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                    Financeiro
                 </a>
                 <a href="#" class="nav-item" data-view="stats">
-                    <span>📈</span> Estatísticas
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                    </svg>
+                    Estatísticas
                 </a>
                 <a href="#" class="nav-item" data-view="setup">
-                    <span>⚙️</span> Novo Setup
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M12 1v6m0 6v6m8.66-9H15m-6 0H3m15.66 6.34l-4.24-4.24m-6 0L4.34 16.66m12.66 0l-4.24-4.24m-6 0L4.34 7.66"></path>
+                    </svg>
+                    Novo Setup
                 </a>
             </nav>
             <div class="sidebar-footer">
@@ -58,7 +89,13 @@
                 <h2 id="viewTitle">Dashboard</h2>
                 <div class="top-bar-actions">
                     <button class="btn-action" id="addClientBtn">+ Novo Cliente</button>
-                    <span class="user-info">👤 Alberto Nascimento</span>
+                    <span class="user-info">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        Alberto Nascimento
+                    </span>
                 </div>
             </header>
 
@@ -66,28 +103,49 @@
             <div id="dashboardView" class="view active">
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-icon">👥</div>
+                        <div class="stat-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </div>
                         <div class="stat-info">
                             <h3 id="totalClients">0</h3>
                             <p>Clientes Ativos</p>
                         </div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon">💰</div>
+                        <div class="stat-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="1" x2="12" y2="23"></line>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                        </div>
                         <div class="stat-info">
                             <h3 id="monthlyRevenue">R$ 0</h3>
                             <p>Receita Mensal</p>
                         </div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon">📈</div>
+                        <div class="stat-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                            </svg>
+                        </div>
                         <div class="stat-info">
                             <h3 id="setupRevenue">R$ 0</h3>
                             <p>Setup Este Mês</p>
                         </div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon">⏰</div>
+                        <div class="stat-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                        </div>
                         <div class="stat-info">
                             <h3 id="pendingPayments">0</h3>
                             <p>Pagamentos Pendentes</p>
