@@ -91,12 +91,14 @@ const App = {
 
         // Search Clients
         document.getElementById('searchClients')?.addEventListener('input', (e) => {
-            this.filterClients(e.target.value);
+            const statusFilter = document.getElementById('filterStatus')?.value || '';
+            this.filterClients(e.target.value, statusFilter);
         });
 
         // Filter Status
         document.getElementById('filterStatus')?.addEventListener('change', (e) => {
-            this.filterClients(document.getElementById('searchClients').value, e.target.value);
+            const searchFilter = document.getElementById('searchClients')?.value || '';
+            this.filterClients(searchFilter, e.target.value);
         });
 
         // Setup Script
@@ -296,7 +298,7 @@ const App = {
     async filterClients(search = '', status = '') {
         let clients = await Storage.getClients();
 
-        if (search) {
+        if (search && search.trim() !== '') {
             search = search.toLowerCase();
             clients = clients.filter(c =>
                 (c.name && c.name.toLowerCase().includes(search)) ||
@@ -305,7 +307,7 @@ const App = {
             );
         }
 
-        if (status) {
+        if (status && status.trim() !== '') {
             clients = clients.filter(c => c.status === status);
         }
 
