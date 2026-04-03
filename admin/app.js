@@ -490,10 +490,11 @@ const App = {
         const conversion = (active + test) > 0 ? Math.round((active / (active + test)) * 100) : 0;
         console.log(`📊 Conversão calculada: ${active} / (${active} + ${test}) = ${conversion}%`);
 
-        // Churn rate: cancelados / (ativos + cancelados)
-        const totalEverActive = active + cancelados;
-        const churnRate = totalEverActive > 0 ? Math.round((cancelados / totalEverActive) * 100) : 0;
-        console.log(`📊 Churn rate calculado: ${cancelados} / (${active} + ${cancelados}) = ${churnRate}%`);
+        // Churn rate: (inadimplentes + cancelados) / (ativos + inadimplentes + cancelados)
+        const churnedClients = inadimplentes + cancelados;
+        const totalActiveBase = active + inadimplentes + cancelados;
+        const churnRate = totalActiveBase > 0 ? Math.round((churnedClients / totalActiveBase) * 100) : 0;
+        console.log(`📊 Churn rate calculado: (${inadimplentes} + ${cancelados}) / (${active} + ${inadimplentes} + ${cancelados}) = ${churnRate}%`);
 
         const avgTicket = active > 0 ? clients
             .filter(c => c.status === 'ativo')
@@ -507,6 +508,7 @@ const App = {
         const statsTotalEl = document.getElementById('statsTotal');
         const statsActiveEl = document.getElementById('statsActive');
         const statsTestEl = document.getElementById('statsTest');
+        const statsOverdueEl = document.getElementById('statsOverdue');
         const statsConversionEl = document.getElementById('statsConversion');
         const statsChurnEl = document.getElementById('statsChurn');
         const statsAvgTicketEl = document.getElementById('statsAvgTicket');
@@ -531,6 +533,13 @@ const App = {
             console.log(`✅ statsTest atualizado: ${test}`);
         } else {
             console.warn(`⚠️ Elemento statsTest não encontrado`);
+        }
+
+        if (statsOverdueEl) {
+            statsOverdueEl.textContent = inadimplentes;
+            console.log(`✅ statsOverdue atualizado: ${inadimplentes}`);
+        } else {
+            console.warn(`⚠️ Elemento statsOverdue não encontrado`);
         }
 
         if (statsConversionEl) {
