@@ -84,8 +84,8 @@ const App = {
             this.saveClient();
         });
 
-        // Modal Close
-        document.querySelectorAll('.modal-close').forEach(btn => {
+        // Modal Close (botão X e botão Cancelar)
+        document.querySelectorAll('.modal-close, .btn-cancel-modal').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.closeModal();
             });
@@ -610,13 +610,18 @@ const App = {
 
                 // Register setup payment if applicable
                 if (clientData.setup_fee > 0) {
-                    await Storage.addPayment({
+                    console.log(`💰 Registrando pagamento de setup: R$ ${clientData.setup_fee} para ${clientData.name}`);
+                    const paymentData = {
                         client_name: clientData.name,
                         type: 'Setup',
                         amount: clientData.setup_fee,
                         status: 'pago',
                         date: clientData.install_date
-                    });
+                    };
+                    const payment = await Storage.addPayment(paymentData);
+                    console.log('✅ Pagamento de setup registrado:', payment);
+                } else {
+                    console.log('ℹ️ Setup fee é zero, não registrando pagamento');
                 }
             }
 
