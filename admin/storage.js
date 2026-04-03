@@ -130,6 +130,21 @@ const Storage = {
         return data;
     },
 
+    async deletePayment(id) {
+        const { error } = await supabaseClient
+            .from('payments')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Erro ao deletar pagamento:', error);
+            throw error;
+        }
+
+        await this.addActivity(`Pagamento estornado (ID: ${id})`);
+        return true;
+    },
+
     async updatePayment(id, updates) {
         const { data, error } = await supabaseClient
             .from('payments')

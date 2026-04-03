@@ -453,7 +453,7 @@ const App = {
         console.log(`📋 renderPaymentsTable: ${payments.length} pagamentos encontrados`);
 
         if (payments.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--gray);">Nenhum pagamento registrado</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--gray);">Nenhum pagamento registrado</td></tr>';
             console.log('ℹ️ Nenhum pagamento para exibir');
             return;
         }
@@ -466,9 +466,31 @@ const App = {
                     <td>${payment.type}</td>
                     <td>R$ ${(payment.amount || 0).toLocaleString('pt-BR')}</td>
                     <td><span class="status-badge status-${payment.status === 'pago' ? 'ativo' : 'inadimplente'}">${payment.status === 'pago' ? 'Pago' : 'Pendente'}</span></td>
+                    <td class="table-actions-cell">
+                        <button class="btn-small btn-delete" onclick="App.estornarPagamento('${payment.id}', '${payment.client_name || payment.clientName}', ${payment.amount})">Estornar</button>
+                    </td>
                 </tr>
             `;
         }).join('');
+    },
+
+    async estornarPagamento(paymentId, clientName, amount) {
+        if (confirm(`⚠️ Tem certeza que deseja estornar o pagamento de R$ ${amount.toLocaleString('pt-BR')} do cliente "${clientName}"?\n\nEsta ação não pode ser desfeita.`)) {
+            try {
+                console.log(`💸 Estornando pagamento ID: ${paymentId}`);
+                await Storage.deletePayment(paymentId);
+
+                // Atualizar views
+                await this.loadFinance();
+                await this.loadDashboard();
+
+                console.log('✅ Pagamento estornado com sucesso');
+                alert('✅ Pagamento estornado com sucesso!');
+            } catch (error) {
+                console.error('❌ Erro ao estornar pagamento:', error);
+                alert('❌ Erro ao estornar pagamento: ' + error.message);
+            }
+        }
     },
 
     // ============ STATS ============
