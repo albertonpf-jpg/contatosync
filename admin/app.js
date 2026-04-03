@@ -127,7 +127,7 @@ const App = {
         });
         document.getElementById(viewName + 'View').classList.add('active');
 
-        // Update title
+        // Update title (se o elemento existir)
         const titles = {
             dashboard: 'Dashboard',
             clients: 'Gerenciar Clientes',
@@ -135,7 +135,10 @@ const App = {
             stats: 'Estatísticas',
             setup: 'Novo Setup'
         };
-        document.getElementById('viewTitle').textContent = titles[viewName];
+        const viewTitleEl = document.getElementById('viewTitle');
+        if (viewTitleEl) {
+            viewTitleEl.textContent = titles[viewName];
+        }
 
         // Load view data
         this.currentView = viewName;
