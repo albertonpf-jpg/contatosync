@@ -157,6 +157,8 @@ const App = {
         const payments = await Storage.getPayments();
         const activities = await Storage.getActivities();
 
+        console.log(`📊 loadDashboard: ${clients.length} clientes, ${activeClients.length} ativos`);
+
         // Stats
         document.getElementById('totalClients').textContent = activeClients.length;
 
@@ -173,6 +175,32 @@ const App = {
 
         const pendingCount = clients.filter(c => c.status === 'inadimplente').length;
         document.getElementById('pendingPayments').textContent = pendingCount;
+
+        // Performance Mensal
+        const newClientsThisMonth = clients.filter(c => {
+            if (!c.install_date && !c.installDate) return false;
+            const installDate = c.install_date || c.installDate;
+            return installDate.startsWith(currentMonth);
+        }).length;
+
+        const testClients = clients.filter(c => c.status === 'teste').length;
+        const conversionRate = testClients > 0 ? Math.round((activeClients.length / (activeClients.length + testClients)) * 100) : 0;
+
+        const churnCount = clients.filter(c => c.status === 'cancelado').length;
+        const totalEverActive = activeClients.length + churnCount;
+        const churnRate = totalEverActive > 0 ? Math.round((churnCount / totalEverActive) * 100) : 0;
+
+        const newClientsMonthEl = document.getElementById('newClientsMonth');
+        const conversionRateEl = document.getElementById('conversionRate');
+        const mrrGrowthEl = document.getElementById('mrrGrowth');
+        const churnRateEl = document.getElementById('churnRate');
+
+        if (newClientsMonthEl) newClientsMonthEl.textContent = newClientsThisMonth;
+        if (conversionRateEl) conversionRateEl.textContent = conversionRate + '%';
+        if (mrrGrowthEl) mrrGrowthEl.textContent = `R$ ${setupThisMonth.toLocaleString('pt-BR')}`;
+        if (churnRateEl) churnRateEl.textContent = churnRate + '%';
+
+        console.log(`📈 Performance: Novos=${newClientsThisMonth}, Conversão=${conversionRate}%, Churn=${churnRate}%`);
 
         // Upcoming payments
         this.renderUpcomingPayments(clients);
@@ -601,6 +629,8 @@ const App = {
             monthly_fee: SETTINGS.plans[document.getElementById('clientPlan').value]?.monthlyPrice || 0,
             notes: document.getElementById('clientNotes').value
         };
+
+        console.log('💾 Salvando cliente com status:', clientData.status, 'ID:', id || 'novo');
 
         try {
             if (id) {
