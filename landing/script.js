@@ -30,12 +30,44 @@ document.getElementById('contactForm').addEventListener('submit', async function
     submitBtn.disabled = true;
 
     try {
-        // Aqui você pode integrar com:
-        // - Email via FormSubmit, EmailJS, ou backend próprio
-        // - WhatsApp API
-        // - CRM/Google Sheets
+        // 1. Salvar lead no Supabase
+        const leadData = {
+            name: data.nome,
+            email: data.email,
+            phone: data.whatsapp,
+            company: '',
+            plan: data.plano,
+            status: 'teste',
+            railway_url: '',
+            github_repo: '',
+            install_date: new Date().toISOString().split('T')[0],
+            setup_fee: 0,
+            monthly_fee: 0,
+            notes: 'Lead capturado via formulário de teste grátis'
+        };
 
-        // Exemplo: redirecionar para WhatsApp com mensagem pré-formatada
+        const { data: savedClient, error } = await supabaseClient
+            .from('clients')
+            .insert([leadData])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Erro ao salvar lead:', error);
+            // Continua mesmo com erro para não bloquear o fluxo
+        } else {
+            console.log('✅ Lead salvo no Supabase:', savedClient);
+
+            // Registrar atividade
+            await supabaseClient
+                .from('activities')
+                .insert([{
+                    message: `Novo lead capturado: ${data.nome} (${data.plano})`,
+                    timestamp: new Date().toISOString()
+                }]);
+        }
+
+        // 2. Redirecionar para WhatsApp com mensagem pré-formatada
         const mensagem = `Olá! Quero fazer um teste grátis do ContatoSync.
 
 📋 Meus dados:
@@ -46,8 +78,8 @@ Plano escolhido: ${data.plano}`;
 
         const whatsappURL = `https://wa.me/5511992741845?text=${encodeURIComponent(mensagem)}`;
 
-        // Simulando envio (remover em produção)
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Pequeno delay para garantir salvamento
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         // Redirecionar para WhatsApp
         window.open(whatsappURL, '_blank');

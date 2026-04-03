@@ -9,7 +9,7 @@ const SETTINGS = {
     // Informações do administrador
     adminName: 'Alberto Nascimento',
     adminEmail: 'alberto@plannedmidia.com.br',
-    adminWhatsApp: '+5511999999999',
+    adminWhatsApp: '+5511992741845',
 
     // Valores padrão dos planos
     plans: {
