@@ -58,10 +58,10 @@ const App = {
 
         // Navigation
         document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', (e) => {
+            item.addEventListener('click', async (e) => {
                 e.preventDefault();
                 const view = item.dataset.view;
-                this.switchView(view);
+                await this.switchView(view);
             });
         });
 
@@ -108,7 +108,7 @@ const App = {
     },
 
     // ============ NAVIGATION ============
-    switchView(viewName) {
+    async switchView(viewName) {
         // Update nav
         document.querySelectorAll('.nav-item').forEach(item => {
             item.classList.remove('active');
@@ -137,7 +137,7 @@ const App = {
         this.currentView = viewName;
         const loadMethod = `load${viewName.charAt(0).toUpperCase() + viewName.slice(1)}`;
         if (typeof this[loadMethod] === 'function') {
-            this[loadMethod]();
+            await this[loadMethod]();
         }
     },
 
@@ -243,6 +243,9 @@ const App = {
 
     renderClientsTable(clients) {
         const tbody = document.getElementById('clientsTableBody');
+
+        // Se o elemento não existe (não está na view clients), não faz nada
+        if (!tbody) return;
 
         if (clients.length === 0) {
             tbody.innerHTML = `
