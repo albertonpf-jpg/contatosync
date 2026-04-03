@@ -362,11 +362,14 @@ const App = {
         // Net profit
         const netProfit = totalRevenue - railwayCosts;
 
-        console.log(`💵 Receita: R$ ${totalRevenue}, Custos: R$ ${railwayCosts}, Lucro: R$ ${netProfit}`);
+        console.log(`💵 Receita Mensal: R$ ${monthlyRevenue}, Setup: R$ ${setupRevenue}, Total: R$ ${totalRevenue}`);
+        console.log(`💵 Custos Railway: ${activeClients.length} clientes × R$ ${SETTINGS.railwayCostPerClient} = R$ ${railwayCosts}`);
+        console.log(`💵 Lucro Líquido: R$ ${totalRevenue} - R$ ${railwayCosts} = R$ ${netProfit}`);
 
         // Atualiza os elementos apenas se existirem (proteção para quando não está na view finance)
         const totalMonthlyRevenueEl = document.getElementById('totalMonthlyRevenue');
-        const railwayCostsEl = document.getElementById('railwayCosts');
+        const totalSetupRevenueEl = document.getElementById('totalSetupRevenue');
+        const railwayCostsEl = document.getElementById('totalRailwayCosts');
         const netProfitEl = document.getElementById('netProfit');
 
         if (totalMonthlyRevenueEl) {
@@ -374,6 +377,13 @@ const App = {
             console.log(`✅ Elemento totalMonthlyRevenue atualizado`);
         } else {
             console.warn(`⚠️ Elemento totalMonthlyRevenue não encontrado`);
+        }
+
+        if (totalSetupRevenueEl) {
+            totalSetupRevenueEl.textContent = `R$ ${setupRevenue.toLocaleString('pt-BR')}`;
+            console.log(`✅ Elemento totalSetupRevenue atualizado`);
+        } else {
+            console.warn(`⚠️ Elemento totalSetupRevenue não encontrado`);
         }
 
         if (railwayCostsEl) {
@@ -398,10 +408,16 @@ const App = {
         const tbody = document.getElementById('paymentsTableBody');
 
         // Se o elemento não existe (não está na view finance), não faz nada
-        if (!tbody) return;
+        if (!tbody) {
+            console.warn('⚠️ Elemento paymentsTableBody não encontrado');
+            return;
+        }
+
+        console.log(`📋 renderPaymentsTable: ${payments.length} pagamentos encontrados`);
 
         if (payments.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--gray);">Nenhum pagamento registrado</td></tr>';
+            console.log('ℹ️ Nenhum pagamento para exibir');
             return;
         }
 
@@ -495,10 +511,16 @@ const App = {
         const container = document.getElementById('planDistribution');
 
         // Se o elemento não existe (não está na view stats), não faz nada
-        if (!container) return;
+        if (!container) {
+            console.warn('⚠️ Elemento planDistribution não encontrado');
+            return;
+        }
+
+        console.log(`📊 renderPlanDistribution: ${clients.length} clientes`);
 
         if (clients.length === 0) {
             container.innerHTML = '<p style="color: var(--gray); padding: 2rem; text-align: center;">Nenhum cliente cadastrado</p>';
+            console.log('ℹ️ Nenhum cliente para distribuir');
             return;
         }
 
@@ -506,6 +528,8 @@ const App = {
             acc[c.plan] = (acc[c.plan] || 0) + 1;
             return acc;
         }, {});
+
+        console.log('📊 Distribuição por plano:', distribution);
 
         container.innerHTML = `
             <div style="padding: 2rem; text-align: center;">
