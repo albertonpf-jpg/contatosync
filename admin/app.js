@@ -464,14 +464,22 @@ const App = {
 
     // ============ STATS ============
     async loadStats() {
+        console.log('📊 ========== INICIANDO loadStats ==========');
         const clients = await Storage.getClients();
+        console.log('📊 Clientes carregados:', clients.length);
+        console.log('📊 Dados dos clientes:', JSON.stringify(clients, null, 2));
 
         const total = clients.length;
         const active = clients.filter(c => c.status === 'ativo').length;
         const test = clients.filter(c => c.status === 'teste').length;
-        const conversion = test > 0 ? Math.round((active / (active + test)) * 100) : 0;
+        const inadimplentes = clients.filter(c => c.status === 'inadimplente').length;
+        const cancelados = clients.filter(c => c.status === 'cancelado').length;
 
-        console.log(`📊 loadStats: Total=${total}, Ativos=${active}, Teste=${test}, Conversão=${conversion}%`);
+        console.log(`📊 Status: Total=${total}, Ativos=${active}, Teste=${test}, Inadimplentes=${inadimplentes}, Cancelados=${cancelados}`);
+
+        // Taxa de conversão: ativos / (ativos + testes)
+        const conversion = (active + test) > 0 ? Math.round((active / (active + test)) * 100) : 0;
+        console.log(`📊 Conversão calculada: ${active} / (${active} + ${test}) = ${conversion}%`);
 
         const avgTicket = active > 0 ? clients
             .filter(c => c.status === 'ativo')
@@ -536,6 +544,9 @@ const App = {
     },
 
     renderPlanDistribution(clients) {
+        console.log('📊 ========== renderPlanDistribution ==========');
+        console.log('📊 Recebeu', clients.length, 'clientes');
+
         const container = document.getElementById('planDistribution');
 
         // Se o elemento não existe (não está na view stats), não faz nada
@@ -544,43 +555,67 @@ const App = {
             return;
         }
 
-        console.log(`📊 renderPlanDistribution: ${clients.length} clientes`);
-
         if (clients.length === 0) {
             container.innerHTML = '<p style="color: var(--gray); padding: 2rem; text-align: center;">Nenhum cliente cadastrado</p>';
             console.log('ℹ️ Nenhum cliente para distribuir');
             return;
         }
 
-        const distribution = clients.reduce((acc, c) => {
-            acc[c.plan] = (acc[c.plan] || 0) + 1;
-            return acc;
-        }, {});
+        // Contar planos
+        const distribution = {};
+        clients.forEach(c => {
+            console.log(`📊 Cliente: ${c.name}, Plano: ${c.plan}, Status: ${c.status}`);
+            if (!distribution[c.plan]) distribution[c.plan] = 0;
+            distribution[c.plan]++;
+        });
 
-        console.log('📊 Distribuição por plano:', distribution);
+        console.log('📊 Distribuição calculada:', distribution);
 
         // Atualizar contadores individuais por plano
         const basicCount = distribution['basico'] || 0;
         const proCount = distribution['pro'] || 0;
         const enterpriseCount = distribution['enterprise'] || 0;
 
+        console.log(`📊 Contagem por plano: Básico=${basicCount}, Pro=${proCount}, Enterprise=${enterpriseCount}`);
+
         const planBasicCountEl = document.getElementById('planBasicCount');
         const planProCountEl = document.getElementById('planProCount');
         const planEnterpriseCountEl = document.getElementById('planEnterpriseCount');
         const totalMRREl = document.getElementById('totalMRR');
 
-        if (planBasicCountEl) planBasicCountEl.textContent = `${basicCount} clientes`;
-        if (planProCountEl) planProCountEl.textContent = `${proCount} clientes`;
-        if (planEnterpriseCountEl) planEnterpriseCountEl.textContent = `${enterpriseCount} clientes`;
+        console.log(`📊 Elementos encontrados: planBasicCount=${!!planBasicCountEl}, planProCount=${!!planProCountEl}, planEnterpriseCount=${!!planEnterpriseCountEl}, totalMRR=${!!totalMRREl}`);
 
-        // Calcular MRR Total
-        const totalMRR = clients
-            .filter(c => c.status === 'ativo')
-            .reduce((sum, c) => sum + (SETTINGS.plans[c.plan]?.monthlyPrice || 0), 0);
+        if (planBasicCountEl) {
+            planBasicCountEl.textContent = `${basicCount} clientes`;
+            console.log(`✅ planBasicCount atualizado: ${basicCount} clientes`);
+        }
 
-        if (totalMRREl) totalMRREl.textContent = `R$ ${totalMRR.toLocaleString('pt-BR')}`;
+        if (planProCountEl) {
+            planProCountEl.textContent = `${proCount} clientes`;
+            console.log(`✅ planProCount atualizado: ${proCount} clientes`);
+        }
 
-        console.log(`📊 Planos: Básico=${basicCount}, Pro=${proCount}, Enterprise=${enterpriseCount}, MRR=R$ ${totalMRR}`);
+        if (planEnterpriseCountEl) {
+            planEnterpriseCountEl.textContent = `${enterpriseCount} clientes`;
+            console.log(`✅ planEnterpriseCount atualizado: ${enterpriseCount} clientes`);
+        }
+
+        // Calcular MRR Total (apenas clientes ativos)
+        const activeClients = clients.filter(c => c.status === 'ativo');
+        console.log(`📊 Clientes ativos para MRR:`, activeClients.length);
+
+        const totalMRR = activeClients.reduce((sum, c) => {
+            const price = SETTINGS.plans[c.plan]?.monthlyPrice || 0;
+            console.log(`📊 Cliente ${c.name}: plano ${c.plan} = R$ ${price}`);
+            return sum + price;
+        }, 0);
+
+        console.log(`📊 MRR Total calculado: R$ ${totalMRR}`);
+
+        if (totalMRREl) {
+            totalMRREl.textContent = `R$ ${totalMRR.toLocaleString('pt-BR')}`;
+            console.log(`✅ totalMRR atualizado: R$ ${totalMRR}`);
+        }
 
         // Renderizar também no container (se existir)
         container.innerHTML = `
@@ -657,78 +692,66 @@ const App = {
         console.log('💾 Salvando cliente com status:', clientData.status, 'ID:', id || 'novo');
 
         try {
+            console.log('💾 Iniciando salvamento...');
+
             if (id) {
                 // Editando cliente existente
+                console.log('📝 Atualizando cliente ID:', id);
                 await Storage.updateClient(id, clientData);
-                console.log('📝 Cliente atualizado');
-
-                // Verificar setup payment apenas se tiver taxa de setup
-                if (clientData.setup_fee > 0) {
-                    try {
-                        console.log('🔍 Verificando setup payment...');
-                        const payments = await Storage.getPayments();
-                        const hasSetupPayment = Array.isArray(payments) && payments.some(p =>
-                            p && p.type === 'Setup' &&
-                            (p.client_name === clientData.name || p.clientName === clientData.name)
-                        );
-
-                        console.log(`🔍 Cliente já tem setup payment? ${hasSetupPayment}`);
-
-                        // Se não tem setup payment, registrar
-                        if (!hasSetupPayment) {
-                            console.log(`💰 Registrando pagamento de setup: R$ ${clientData.setup_fee} para ${clientData.name}`);
-                            const paymentData = {
-                                client_name: clientData.name,
-                                type: 'Setup',
-                                amount: clientData.setup_fee,
-                                status: 'pago',
-                                date: clientData.install_date
-                            };
-                            await Storage.addPayment(paymentData);
-                            console.log('✅ Pagamento de setup registrado');
-                        }
-                    } catch (paymentError) {
-                        console.error('⚠️ Erro ao verificar/registrar setup payment:', paymentError);
-                        // Continua mesmo se houver erro no pagamento
-                    }
-                }
+                console.log('✅ Cliente atualizado no banco');
             } else {
                 // Criando cliente novo
+                console.log('➕ Criando novo cliente');
                 await Storage.addClient(clientData);
+                console.log('✅ Cliente criado no banco');
+            }
 
-                // Register setup payment if applicable
-                if (clientData.setup_fee > 0) {
-                    console.log(`💰 Registrando pagamento de setup: R$ ${clientData.setup_fee} para ${clientData.name}`);
-                    const paymentData = {
-                        client_name: clientData.name,
-                        type: 'Setup',
-                        amount: clientData.setup_fee,
-                        status: 'pago',
-                        date: clientData.install_date
-                    };
-                    const payment = await Storage.addPayment(paymentData);
-                    console.log('✅ Pagamento de setup registrado:', payment);
-                } else {
-                    console.log('ℹ️ Setup fee é zero, não registrando pagamento');
+            // Registrar setup payment (para edição e criação)
+            if (clientData.setup_fee > 0) {
+                try {
+                    console.log('💰 Verificando setup payment...');
+                    const payments = await Storage.getPayments();
+                    console.log(`📋 Total de pagamentos: ${payments ? payments.length : 0}`);
+
+                    const hasSetupPayment = Array.isArray(payments) && payments.some(p =>
+                        p && p.type === 'Setup' &&
+                        (p.client_name === clientData.name || p.clientName === clientData.name)
+                    );
+
+                    console.log(`🔍 Cliente já tem setup payment? ${hasSetupPayment}`);
+
+                    if (!hasSetupPayment) {
+                        console.log(`💰 Registrando setup payment: R$ ${clientData.setup_fee}`);
+                        await Storage.addPayment({
+                            client_name: clientData.name,
+                            type: 'Setup',
+                            amount: clientData.setup_fee,
+                            status: 'pago',
+                            date: clientData.install_date
+                        });
+                        console.log('✅ Setup payment registrado');
+                    }
+                } catch (paymentError) {
+                    console.error('⚠️ Erro em setup payment (não crítico):', paymentError);
                 }
             }
 
             this.closeModal();
+            console.log('🔄 Atualizando todas as views...');
 
-            console.log('🔄 Atualizando TODAS as views após salvar cliente...');
-
-            // Atualizar TODAS as páginas (não só a atual)
+            // Atualizar TODAS as páginas
             await this.loadClients();
             await this.loadDashboard();
             await this.loadFinance();
             await this.loadStats();
 
-            console.log('✅ TODAS as views atualizadas com sucesso');
-
+            console.log('✅ CONCLUÍDO - Cliente salvo e views atualizadas');
             alert('✅ Cliente salvo com sucesso!');
+
         } catch (error) {
-            console.error('Erro ao salvar cliente:', error);
-            alert('❌ Erro ao salvar cliente. Verifique o console.');
+            console.error('❌ ERRO CRÍTICO ao salvar:', error);
+            console.error('Stack:', error.stack);
+            alert('❌ Erro: ' + error.message);
         }
     },
 
