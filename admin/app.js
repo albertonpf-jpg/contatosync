@@ -184,11 +184,20 @@ const App = {
         }).length;
 
         const testClients = clients.filter(c => c.status === 'teste').length;
-        const conversionRate = testClients > 0 ? Math.round((activeClients.length / (activeClients.length + testClients)) * 100) : 0;
+        const cancelados = clients.filter(c => c.status === 'cancelado').length;
 
-        const churnCount = clients.filter(c => c.status === 'cancelado').length;
-        const totalEverActive = activeClients.length + churnCount;
-        const churnRate = totalEverActive > 0 ? Math.round((churnCount / totalEverActive) * 100) : 0;
+        // Conversão: ativos / (ativos + testes)
+        const conversionRate = (activeClients.length + testClients) > 0
+            ? Math.round((activeClients.length / (activeClients.length + testClients)) * 100)
+            : 0;
+
+        // Churn: cancelados / (ativos + cancelados)
+        const totalEverActive = activeClients.length + cancelados;
+        const churnRate = totalEverActive > 0
+            ? Math.round((cancelados / totalEverActive) * 100)
+            : 0;
+
+        console.log(`📈 Performance Dashboard: Novos=${newClientsThisMonth}, Conversão=${conversionRate}%, Churn=${churnRate}% (${cancelados} cancelados de ${totalEverActive} total)`);
 
         const newClientsMonthEl = document.getElementById('newClientsMonth');
         const conversionRateEl = document.getElementById('conversionRate');
@@ -547,16 +556,7 @@ const App = {
         console.log('📊 ========== renderPlanDistribution ==========');
         console.log('📊 Recebeu', clients.length, 'clientes');
 
-        const container = document.getElementById('planDistribution');
-
-        // Se o elemento não existe (não está na view stats), não faz nada
-        if (!container) {
-            console.warn('⚠️ Elemento planDistribution não encontrado');
-            return;
-        }
-
         if (clients.length === 0) {
-            container.innerHTML = '<p style="color: var(--gray); padding: 2rem; text-align: center;">Nenhum cliente cadastrado</p>';
             console.log('ℹ️ Nenhum cliente para distribuir');
             return;
         }
@@ -617,16 +617,22 @@ const App = {
             console.log(`✅ totalMRR atualizado: R$ ${totalMRR}`);
         }
 
-        // Renderizar também no container (se existir)
-        container.innerHTML = `
-            <div style="padding: 2rem; text-align: center;">
-                ${Object.entries(distribution).map(([plan, count]) => `
-                    <div style="margin-bottom: 1rem;">
-                        <strong>${SETTINGS.plans[plan]?.name || plan}:</strong> ${count} clientes (${Math.round(count / clients.length * 100)}%)
-                    </div>
-                `).join('')}
-            </div>
-        `;
+        // Renderizar também no container de distribuição (se existir)
+        const container = document.getElementById('planDistribution');
+        if (container) {
+            container.innerHTML = `
+                <div style="padding: 2rem; text-align: center;">
+                    ${Object.entries(distribution).map(([plan, count]) => `
+                        <div style="margin-bottom: 1rem;">
+                            <strong>${SETTINGS.plans[plan]?.name || plan}:</strong> ${count} clientes (${Math.round(count / clients.length * 100)}%)
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            console.log('✅ Container planDistribution renderizado');
+        } else {
+            console.log('ℹ️ Container planDistribution não existe (ok, atualizamos os contadores individuais)');
+        }
     },
 
     // ============ SETUP ============
