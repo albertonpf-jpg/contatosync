@@ -490,6 +490,11 @@ const App = {
         const conversion = (active + test) > 0 ? Math.round((active / (active + test)) * 100) : 0;
         console.log(`📊 Conversão calculada: ${active} / (${active} + ${test}) = ${conversion}%`);
 
+        // Churn rate: cancelados / (ativos + cancelados)
+        const totalEverActive = active + cancelados;
+        const churnRate = totalEverActive > 0 ? Math.round((cancelados / totalEverActive) * 100) : 0;
+        console.log(`📊 Churn rate calculado: ${cancelados} / (${active} + ${cancelados}) = ${churnRate}%`);
+
         const avgTicket = active > 0 ? clients
             .filter(c => c.status === 'ativo')
             .reduce((sum, c) => sum + (SETTINGS.plans[c.plan]?.monthlyPrice || 0), 0) / active : 0;
@@ -503,6 +508,7 @@ const App = {
         const statsActiveEl = document.getElementById('statsActive');
         const statsTestEl = document.getElementById('statsTest');
         const statsConversionEl = document.getElementById('statsConversion');
+        const statsChurnEl = document.getElementById('statsChurn');
         const statsAvgTicketEl = document.getElementById('statsAvgTicket');
         const statsLTVEl = document.getElementById('statsLTV');
 
@@ -532,6 +538,13 @@ const App = {
             console.log(`✅ statsConversion atualizado: ${conversion}%`);
         } else {
             console.warn(`⚠️ Elemento statsConversion não encontrado`);
+        }
+
+        if (statsChurnEl) {
+            statsChurnEl.textContent = churnRate + '%';
+            console.log(`✅ statsChurn atualizado: ${churnRate}%`);
+        } else {
+            console.warn(`⚠️ Elemento statsChurn não encontrado`);
         }
 
         if (statsAvgTicketEl) {
