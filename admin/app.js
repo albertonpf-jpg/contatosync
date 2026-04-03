@@ -559,6 +559,30 @@ const App = {
 
         console.log('📊 Distribuição por plano:', distribution);
 
+        // Atualizar contadores individuais por plano
+        const basicCount = distribution['basico'] || 0;
+        const proCount = distribution['pro'] || 0;
+        const enterpriseCount = distribution['enterprise'] || 0;
+
+        const planBasicCountEl = document.getElementById('planBasicCount');
+        const planProCountEl = document.getElementById('planProCount');
+        const planEnterpriseCountEl = document.getElementById('planEnterpriseCount');
+        const totalMRREl = document.getElementById('totalMRR');
+
+        if (planBasicCountEl) planBasicCountEl.textContent = `${basicCount} clientes`;
+        if (planProCountEl) planProCountEl.textContent = `${proCount} clientes`;
+        if (planEnterpriseCountEl) planEnterpriseCountEl.textContent = `${enterpriseCount} clientes`;
+
+        // Calcular MRR Total
+        const totalMRR = clients
+            .filter(c => c.status === 'ativo')
+            .reduce((sum, c) => sum + (SETTINGS.plans[c.plan]?.monthlyPrice || 0), 0);
+
+        if (totalMRREl) totalMRREl.textContent = `R$ ${totalMRR.toLocaleString('pt-BR')}`;
+
+        console.log(`📊 Planos: Básico=${basicCount}, Pro=${proCount}, Enterprise=${enterpriseCount}, MRR=R$ ${totalMRR}`);
+
+        // Renderizar também no container (se existir)
         container.innerHTML = `
             <div style="padding: 2rem; text-align: center;">
                 ${Object.entries(distribution).map(([plan, count]) => `
@@ -636,29 +660,37 @@ const App = {
             if (id) {
                 // Editando cliente existente
                 await Storage.updateClient(id, clientData);
-                console.log('📝 Cliente atualizado, verificando setup payment...');
+                console.log('📝 Cliente atualizado');
 
-                // Verificar se já existe pagamento de setup para este cliente
-                const payments = await Storage.getPayments();
-                const hasSetupPayment = payments.some(p =>
-                    p.type === 'Setup' &&
-                    (p.client_name === clientData.name || p.clientName === clientData.name)
-                );
+                // Verificar setup payment apenas se tiver taxa de setup
+                if (clientData.setup_fee > 0) {
+                    try {
+                        console.log('🔍 Verificando setup payment...');
+                        const payments = await Storage.getPayments();
+                        const hasSetupPayment = Array.isArray(payments) && payments.some(p =>
+                            p && p.type === 'Setup' &&
+                            (p.client_name === clientData.name || p.clientName === clientData.name)
+                        );
 
-                console.log(`🔍 Cliente já tem setup payment? ${hasSetupPayment}`);
+                        console.log(`🔍 Cliente já tem setup payment? ${hasSetupPayment}`);
 
-                // Se não tem setup payment e tem taxa de setup, registrar
-                if (!hasSetupPayment && clientData.setup_fee > 0) {
-                    console.log(`💰 Registrando pagamento de setup na edição: R$ ${clientData.setup_fee} para ${clientData.name}`);
-                    const paymentData = {
-                        client_name: clientData.name,
-                        type: 'Setup',
-                        amount: clientData.setup_fee,
-                        status: 'pago',
-                        date: clientData.install_date
-                    };
-                    const payment = await Storage.addPayment(paymentData);
-                    console.log('✅ Pagamento de setup registrado na edição:', payment);
+                        // Se não tem setup payment, registrar
+                        if (!hasSetupPayment) {
+                            console.log(`💰 Registrando pagamento de setup: R$ ${clientData.setup_fee} para ${clientData.name}`);
+                            const paymentData = {
+                                client_name: clientData.name,
+                                type: 'Setup',
+                                amount: clientData.setup_fee,
+                                status: 'pago',
+                                date: clientData.install_date
+                            };
+                            await Storage.addPayment(paymentData);
+                            console.log('✅ Pagamento de setup registrado');
+                        }
+                    } catch (paymentError) {
+                        console.error('⚠️ Erro ao verificar/registrar setup payment:', paymentError);
+                        // Continua mesmo se houver erro no pagamento
+                    }
                 }
             } else {
                 // Criando cliente novo
