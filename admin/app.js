@@ -1,5 +1,6 @@
 // ============================================
 // CONTATOSYNC ADMIN - Main Application
+// v2.0 - Deploy: 2026-04-03 21:30
 // ============================================
 
 const App = {
@@ -7,6 +8,7 @@ const App = {
     currentClient: null,
 
     init() {
+        console.log('🚀 ContatoSync Admin v2.0 - Inicializado em:', new Date().toLocaleString('pt-BR'));
         this.checkAuth();
         this.setupEventListeners();
         this.loadDashboard();
@@ -109,6 +111,8 @@ const App = {
 
     // ============ NAVIGATION ============
     async switchView(viewName) {
+        console.log(`📄 Mudando para view: ${viewName}`);
+
         // Update nav
         document.querySelectorAll('.nav-item').forEach(item => {
             item.classList.remove('active');
@@ -137,7 +141,9 @@ const App = {
         this.currentView = viewName;
         const loadMethod = `load${viewName.charAt(0).toUpperCase() + viewName.slice(1)}`;
         if (typeof this[loadMethod] === 'function') {
+            console.log(`⏳ Carregando dados com ${loadMethod}()...`);
             await this[loadMethod]();
+            console.log(`✅ ${loadMethod}() concluído`);
         }
     },
 
@@ -245,7 +251,12 @@ const App = {
         const tbody = document.getElementById('clientsTableBody');
 
         // Se o elemento não existe (não está na view clients), não faz nada
-        if (!tbody) return;
+        if (!tbody) {
+            console.warn('⚠️ renderClientsTable: elemento clientsTableBody não encontrado');
+            return;
+        }
+
+        console.log(`📋 renderClientsTable: renderizando ${clients.length} clientes`);
 
         if (clients.length === 0) {
             tbody.innerHTML = `
@@ -300,6 +311,7 @@ const App = {
 
     async filterClients(search = '', status = '') {
         let clients = await Storage.getClients();
+        console.log(`🔍 Filtrando: search="${search}", status="${status}", total clientes: ${clients.length}`);
 
         if (search && search.trim() !== '') {
             search = search.toLowerCase();
@@ -312,8 +324,10 @@ const App = {
 
         if (status && status.trim() !== '') {
             clients = clients.filter(c => c.status === status);
+            console.log(`📊 Após filtro de status "${status}": ${clients.length} clientes`);
         }
 
+        console.log(`✅ Renderizando ${clients.length} clientes`);
         this.renderClientsTable(clients);
     },
 
@@ -322,6 +336,8 @@ const App = {
         const clients = await Storage.getClients();
         const activeClients = clients.filter(c => c.status === 'ativo');
         const payments = await Storage.getPayments();
+
+        console.log(`💰 loadFinance: ${clients.length} clientes, ${activeClients.length} ativos`);
 
         const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -343,14 +359,33 @@ const App = {
         // Net profit
         const netProfit = totalRevenue - railwayCosts;
 
+        console.log(`💵 Receita: R$ ${totalRevenue}, Custos: R$ ${railwayCosts}, Lucro: R$ ${netProfit}`);
+
         // Atualiza os elementos apenas se existirem (proteção para quando não está na view finance)
         const totalMonthlyRevenueEl = document.getElementById('totalMonthlyRevenue');
         const railwayCostsEl = document.getElementById('railwayCosts');
         const netProfitEl = document.getElementById('netProfit');
 
-        if (totalMonthlyRevenueEl) totalMonthlyRevenueEl.textContent = `R$ ${totalRevenue.toLocaleString('pt-BR')}`;
-        if (railwayCostsEl) railwayCostsEl.textContent = `R$ ${railwayCosts.toLocaleString('pt-BR')}`;
-        if (netProfitEl) netProfitEl.textContent = `R$ ${netProfit.toLocaleString('pt-BR')}`;
+        if (totalMonthlyRevenueEl) {
+            totalMonthlyRevenueEl.textContent = `R$ ${totalRevenue.toLocaleString('pt-BR')}`;
+            console.log(`✅ Elemento totalMonthlyRevenue atualizado`);
+        } else {
+            console.warn(`⚠️ Elemento totalMonthlyRevenue não encontrado`);
+        }
+
+        if (railwayCostsEl) {
+            railwayCostsEl.textContent = `R$ ${railwayCosts.toLocaleString('pt-BR')}`;
+            console.log(`✅ Elemento railwayCosts atualizado`);
+        } else {
+            console.warn(`⚠️ Elemento railwayCosts não encontrado`);
+        }
+
+        if (netProfitEl) {
+            netProfitEl.textContent = `R$ ${netProfit.toLocaleString('pt-BR')}`;
+            console.log(`✅ Elemento netProfit atualizado`);
+        } else {
+            console.warn(`⚠️ Elemento netProfit não encontrado`);
+        }
 
         // Payments table
         this.renderPaymentsTable(payments);
@@ -389,11 +424,15 @@ const App = {
         const test = clients.filter(c => c.status === 'teste').length;
         const conversion = test > 0 ? Math.round((active / (active + test)) * 100) : 0;
 
+        console.log(`📊 loadStats: Total=${total}, Ativos=${active}, Teste=${test}, Conversão=${conversion}%`);
+
         const avgTicket = active > 0 ? clients
             .filter(c => c.status === 'ativo')
             .reduce((sum, c) => sum + (SETTINGS.plans[c.plan]?.monthlyPrice || 0), 0) / active : 0;
 
         const ltv = avgTicket * SETTINGS.stats.averageClientLifetimeMonths;
+
+        console.log(`💵 Ticket Médio: R$ ${avgTicket.toFixed(2)}, LTV: R$ ${ltv.toFixed(2)}`);
 
         // Atualiza elementos apenas se existirem (proteção para quando não está na view stats)
         const statsTotalEl = document.getElementById('statsTotal');
@@ -403,12 +442,47 @@ const App = {
         const statsAvgTicketEl = document.getElementById('statsAvgTicket');
         const statsLTVEl = document.getElementById('statsLTV');
 
-        if (statsTotalEl) statsTotalEl.textContent = total;
-        if (statsActiveEl) statsActiveEl.textContent = active;
-        if (statsTestEl) statsTestEl.textContent = test;
-        if (statsConversionEl) statsConversionEl.textContent = conversion + '%';
-        if (statsAvgTicketEl) statsAvgTicketEl.textContent = `R$ ${Math.round(avgTicket)}`;
-        if (statsLTVEl) statsLTVEl.textContent = `R$ ${Math.round(ltv).toLocaleString('pt-BR')}`;
+        if (statsTotalEl) {
+            statsTotalEl.textContent = total;
+            console.log(`✅ statsTotal atualizado: ${total}`);
+        } else {
+            console.warn(`⚠️ Elemento statsTotal não encontrado`);
+        }
+
+        if (statsActiveEl) {
+            statsActiveEl.textContent = active;
+            console.log(`✅ statsActive atualizado: ${active}`);
+        } else {
+            console.warn(`⚠️ Elemento statsActive não encontrado`);
+        }
+
+        if (statsTestEl) {
+            statsTestEl.textContent = test;
+            console.log(`✅ statsTest atualizado: ${test}`);
+        } else {
+            console.warn(`⚠️ Elemento statsTest não encontrado`);
+        }
+
+        if (statsConversionEl) {
+            statsConversionEl.textContent = conversion + '%';
+            console.log(`✅ statsConversion atualizado: ${conversion}%`);
+        } else {
+            console.warn(`⚠️ Elemento statsConversion não encontrado`);
+        }
+
+        if (statsAvgTicketEl) {
+            statsAvgTicketEl.textContent = `R$ ${Math.round(avgTicket)}`;
+            console.log(`✅ statsAvgTicket atualizado: R$ ${Math.round(avgTicket)}`);
+        } else {
+            console.warn(`⚠️ Elemento statsAvgTicket não encontrado`);
+        }
+
+        if (statsLTVEl) {
+            statsLTVEl.textContent = `R$ ${Math.round(ltv).toLocaleString('pt-BR')}`;
+            console.log(`✅ statsLTV atualizado: R$ ${Math.round(ltv)}`);
+        } else {
+            console.warn(`⚠️ Elemento statsLTV não encontrado`);
+        }
 
         // Plan distribution
         this.renderPlanDistribution(clients);
@@ -521,11 +595,15 @@ const App = {
 
             this.closeModal();
 
+            console.log('🔄 Atualizando TODAS as views após salvar cliente...');
+
             // Atualizar TODAS as páginas (não só a atual)
             await this.loadClients();
             await this.loadDashboard();
             await this.loadFinance();
             await this.loadStats();
+
+            console.log('✅ TODAS as views atualizadas com sucesso');
 
             alert('✅ Cliente salvo com sucesso!');
         } catch (error) {
