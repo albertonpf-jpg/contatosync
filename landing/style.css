@@ -152,20 +152,19 @@ body::after {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--cyan) 0%, #00b8e6 100%);
+    background: var(--white);
     color: var(--dark);
     padding: calc(var(--space) * 1.75) calc(var(--space) * 3.5);
     font-family: var(--font-display);
     font-weight: 900;
     font-size: 0.9375rem;
-    border: none;
+    border: 2px solid var(--white);
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 16px rgba(0, 217, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.2);
     position: relative;
     overflow: hidden;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .btn-primary::before {
@@ -179,7 +178,9 @@ body::after {
 
 .btn-primary:hover {
     transform: translateY(-3px);
-    box-shadow: 0 12px 32px rgba(0, 217, 255, 0.45);
+    box-shadow: 0 12px 32px rgba(255, 255, 255, 0.3);
+    background: var(--cyan);
+    color: var(--dark);
 }
 
 .btn-primary:hover::before {
