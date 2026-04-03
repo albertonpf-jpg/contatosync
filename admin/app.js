@@ -604,8 +604,34 @@ const App = {
 
         try {
             if (id) {
+                // Editando cliente existente
                 await Storage.updateClient(id, clientData);
+                console.log('📝 Cliente atualizado, verificando setup payment...');
+
+                // Verificar se já existe pagamento de setup para este cliente
+                const payments = await Storage.getPayments();
+                const hasSetupPayment = payments.some(p =>
+                    p.type === 'Setup' &&
+                    (p.client_name === clientData.name || p.clientName === clientData.name)
+                );
+
+                console.log(`🔍 Cliente já tem setup payment? ${hasSetupPayment}`);
+
+                // Se não tem setup payment e tem taxa de setup, registrar
+                if (!hasSetupPayment && clientData.setup_fee > 0) {
+                    console.log(`💰 Registrando pagamento de setup na edição: R$ ${clientData.setup_fee} para ${clientData.name}`);
+                    const paymentData = {
+                        client_name: clientData.name,
+                        type: 'Setup',
+                        amount: clientData.setup_fee,
+                        status: 'pago',
+                        date: clientData.install_date
+                    };
+                    const payment = await Storage.addPayment(paymentData);
+                    console.log('✅ Pagamento de setup registrado na edição:', payment);
+                }
             } else {
+                // Criando cliente novo
                 await Storage.addClient(clientData);
 
                 // Register setup payment if applicable
