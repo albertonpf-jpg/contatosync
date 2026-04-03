@@ -498,6 +498,15 @@ const App = {
             this.closeModal();
             await this.loadClients();
             await this.loadDashboard();
+
+            // Atualizar todas as páginas
+            if (this.currentView === 'finance') {
+                await this.loadFinance();
+            }
+            if (this.currentView === 'stats') {
+                await this.loadStats();
+            }
+
             alert('✅ Cliente salvo com sucesso!');
         } catch (error) {
             console.error('Erro ao salvar cliente:', error);
