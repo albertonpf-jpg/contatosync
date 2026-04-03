@@ -340,9 +340,14 @@ const App = {
         // Net profit
         const netProfit = totalRevenue - railwayCosts;
 
-        document.getElementById('totalMonthlyRevenue').textContent = `R$ ${totalRevenue.toLocaleString('pt-BR')}`;
-        document.getElementById('railwayCosts').textContent = `R$ ${railwayCosts.toLocaleString('pt-BR')}`;
-        document.getElementById('netProfit').textContent = `R$ ${netProfit.toLocaleString('pt-BR')}`;
+        // Atualiza os elementos apenas se existirem (proteção para quando não está na view finance)
+        const totalMonthlyRevenueEl = document.getElementById('totalMonthlyRevenue');
+        const railwayCostsEl = document.getElementById('railwayCosts');
+        const netProfitEl = document.getElementById('netProfit');
+
+        if (totalMonthlyRevenueEl) totalMonthlyRevenueEl.textContent = `R$ ${totalRevenue.toLocaleString('pt-BR')}`;
+        if (railwayCostsEl) railwayCostsEl.textContent = `R$ ${railwayCosts.toLocaleString('pt-BR')}`;
+        if (netProfitEl) netProfitEl.textContent = `R$ ${netProfit.toLocaleString('pt-BR')}`;
 
         // Payments table
         this.renderPaymentsTable(payments);
@@ -350,6 +355,9 @@ const App = {
 
     renderPaymentsTable(payments) {
         const tbody = document.getElementById('paymentsTableBody');
+
+        // Se o elemento não existe (não está na view finance), não faz nada
+        if (!tbody) return;
 
         if (payments.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--gray);">Nenhum pagamento registrado</td></tr>';
@@ -384,12 +392,20 @@ const App = {
 
         const ltv = avgTicket * SETTINGS.stats.averageClientLifetimeMonths;
 
-        document.getElementById('statsTotal').textContent = total;
-        document.getElementById('statsActive').textContent = active;
-        document.getElementById('statsTest').textContent = test;
-        document.getElementById('statsConversion').textContent = conversion + '%';
-        document.getElementById('statsAvgTicket').textContent = `R$ ${Math.round(avgTicket)}`;
-        document.getElementById('statsLTV').textContent = `R$ ${Math.round(ltv).toLocaleString('pt-BR')}`;
+        // Atualiza elementos apenas se existirem (proteção para quando não está na view stats)
+        const statsTotalEl = document.getElementById('statsTotal');
+        const statsActiveEl = document.getElementById('statsActive');
+        const statsTestEl = document.getElementById('statsTest');
+        const statsConversionEl = document.getElementById('statsConversion');
+        const statsAvgTicketEl = document.getElementById('statsAvgTicket');
+        const statsLTVEl = document.getElementById('statsLTV');
+
+        if (statsTotalEl) statsTotalEl.textContent = total;
+        if (statsActiveEl) statsActiveEl.textContent = active;
+        if (statsTestEl) statsTestEl.textContent = test;
+        if (statsConversionEl) statsConversionEl.textContent = conversion + '%';
+        if (statsAvgTicketEl) statsAvgTicketEl.textContent = `R$ ${Math.round(avgTicket)}`;
+        if (statsLTVEl) statsLTVEl.textContent = `R$ ${Math.round(ltv).toLocaleString('pt-BR')}`;
 
         // Plan distribution
         this.renderPlanDistribution(clients);
@@ -397,6 +413,9 @@ const App = {
 
     renderPlanDistribution(clients) {
         const container = document.getElementById('planDistribution');
+
+        // Se o elemento não existe (não está na view stats), não faz nada
+        if (!container) return;
 
         if (clients.length === 0) {
             container.innerHTML = '<p style="color: var(--gray); padding: 2rem; text-align: center;">Nenhum cliente cadastrado</p>';
