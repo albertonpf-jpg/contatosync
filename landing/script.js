@@ -44,7 +44,7 @@ Email: ${data.email}
 WhatsApp: ${data.whatsapp}
 Plano escolhido: ${data.plano}`;
 
-        const whatsappURL = `https://wa.me/5511999999999?text=${encodeURIComponent(mensagem)}`;
+        const whatsappURL = `https://wa.me/5511992741845?text=${encodeURIComponent(mensagem)}`;
 
         // Simulando envio (remover em produção)
         await new Promise(resolve => setTimeout(resolve, 1000));

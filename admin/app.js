@@ -65,9 +65,11 @@ const App = {
             });
         });
 
-        // Add Client Button
-        document.getElementById('addClientBtn').addEventListener('click', () => {
-            this.openClientModal();
+        // Add Client Buttons (múltiplos botões nas páginas)
+        document.querySelectorAll('.btn-add-client').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.openClientModal();
+            });
         });
 
         document.getElementById('addFirstClient')?.addEventListener('click', () => {
