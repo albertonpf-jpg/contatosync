@@ -498,16 +498,12 @@ const App = {
             }
 
             this.closeModal();
+
+            // Atualizar TODAS as páginas (não só a atual)
             await this.loadClients();
             await this.loadDashboard();
-
-            // Atualizar todas as páginas
-            if (this.currentView === 'finance') {
-                await this.loadFinance();
-            }
-            if (this.currentView === 'stats') {
-                await this.loadStats();
-            }
+            await this.loadFinance();
+            await this.loadStats();
 
             alert('✅ Cliente salvo com sucesso!');
         } catch (error) {
