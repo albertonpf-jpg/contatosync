@@ -252,12 +252,12 @@ body::after {
 .sidebar-logo {
     display: flex;
     align-items: center;
-    gap: calc(var(--space) * 2);
+    gap: calc(var(--space) * 1.5);
 }
 
 .logo-icon-sidebar {
-    width: 48px;
-    height: 48px;
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -268,8 +268,13 @@ body::after {
     box-shadow: 0 4px 16px rgba(0, 217, 255, 0.2);
 }
 
+.logo-icon-sidebar svg {
+    width: 20px;
+    height: 20px;
+}
+
 .sidebar-logo span {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     font-weight: 800;
     font-family: var(--font-display);
     letter-spacing: -0.02em;
@@ -278,9 +283,6 @@ body::after {
     -webkit-text-fill-color: transparent;
     background-clip: text;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 180px;
 }
 
 .sidebar-nav {
