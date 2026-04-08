@@ -765,6 +765,16 @@ app.post('/auth/icloud/disconnect', (req, res) => {
 
 app.get('/sequencer', (req, res) => res.json(appState.sequencer));
 
+app.get('/contacts', async (req, res) => {
+    try {
+        const contacts = await dbGet('contacts');
+        res.json(contacts || []);
+    } catch (e) {
+        log('Erro ao buscar contatos: ' + e.message, 'error');
+        res.json([]);
+    }
+});
+
 app.put('/sequencer', async (req, res) => {
     const { prefix, current } = req.body;
     if (prefix) appState.sequencer.prefix = prefix;

@@ -835,15 +835,20 @@
                 updatePreviews();
             } catch(e) {}
             try {
-                const [g, ic, st] = await Promise.all([
+                const [g, ic, st, contacts] = await Promise.all([
                     api('GET', '/google/status'),
                     api('GET', '/icloud/status'),
-                    api('GET', '/whatsapp/status')
+                    api('GET', '/whatsapp/status'),
+                    api('GET', '/contacts')
                 ]);
                 if (g.connected) setGoogleConnected(true);
                 if (ic.connected) setICloudConnected(true);
                 if (st.status === 'connected') setWAConnected(true);
                 applyStatus(st);
+                if (contacts && contacts.length > 0) {
+                    state.contacts = contacts.sort((a, b) => new Date(b.detected_at) - new Date(a.detected_at));
+                    render();
+                }
             } catch(e) {
                 showErr('Backend offline. Execute "npm start" na pasta do projeto.');
             }
