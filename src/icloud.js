@@ -136,10 +136,10 @@ async function saveToICloud(phone, name) {
 
   const { appleId, appPassword } = creds;
   const basicAuth = Buffer.from(appleId + ':' + appPassword).toString('base64');
-  
+
   const principalUrl = await discoverPrincipalUrl(appleId, appPassword);
   const uid = 'contatosync-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-  
+
   // Monta o vCard 3.0
   const vcard = [
     'BEGIN:VCARD',
@@ -152,6 +152,7 @@ async function saveToICloud(phone, name) {
   ].join('\r\n');
 
   const cardUrl = principalUrl.replace(/\/?$/, '/') + uid + '.vcf';
+  console.log('[iCloud] Salvando:', name, '→', cardUrl);
 
   const res = await fetch(cardUrl, {
     method: 'PUT',
@@ -162,11 +163,29 @@ async function saveToICloud(phone, name) {
     body: vcard,
   });
 
+  console.log('[iCloud] Resposta PUT:', res.status, res.statusText);
+  const responseBody = await res.text();
+  if (responseBody) console.log('[iCloud] Body:', responseBody);
+
   if (!res.ok && res.status !== 201 && res.status !== 204) {
     throw new Error('Erro ao salvar contato no iCloud: ' + res.status);
   }
 
-  return { uid, name, phone };
+  // Verificar se realmente foi salvo
+  const checkRes = await fetch(cardUrl, {
+    method: 'GET',
+    headers: { 'Authorization': 'Basic ' + basicAuth }
+  });
+
+  console.log('[iCloud] Verificação GET:', checkRes.status);
+  if (checkRes.ok) {
+    const savedVcard = await checkRes.text();
+    console.log('[iCloud] Contato confirmado no servidor:', name);
+  } else {
+    console.log('[iCloud] AVISO: Contato não encontrado após salvar:', name, '- Status:', checkRes.status);
+  }
+
+  return { uid, name, phone, cardUrl };
 }
 
 module.exports = {
