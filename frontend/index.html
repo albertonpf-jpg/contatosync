@@ -125,7 +125,6 @@
         .bulk-bar{display:flex;align-items:center;justify-content:space-between;background:rgba(240,165,0,.06);border:1px solid rgba(240,165,0,.2);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;gap:1rem}
         .bulk-text{font-size:13px}.bulk-text span{color:var(--amber);font-weight:500}
 
-        /* Barra de sincronização */
         .sync-bar{background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.25);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem}
         .sync-bar-top{display:flex;align-items:center;justify-content:space-between;gap:1rem}
         .sync-bar-info{font-size:13px;color:var(--text2)}
@@ -339,7 +338,6 @@
                         <span class="live-right" id="lastCheck">agora</span>
                     </div>
 
-                    <!-- Barra de sincronização de histórico -->
                     <div class="sync-bar" id="syncBar">
                         <div class="sync-bar-top">
                             <div class="sync-bar-info">
@@ -438,14 +436,11 @@
             } catch(e) { toast('Erro ao salvar', 'red'); }
         });
 
-        document.getElementById('autoToggle').addEventListener('change', async function() {
-            try {
-                await api('POST', '/whatsapp/auto-save', { enabled: this.checked });
-                state.autoSave = this.checked;
-                const lbl = document.getElementById('autoLabel');
-                lbl.textContent = this.checked ? 'ativado' : 'desativado';
-                lbl.style.color = this.checked ? 'var(--green)' : 'var(--text3)';
-            } catch(e) {}
+        document.getElementById('autoToggle').addEventListener('change', function() {
+            state.autoSave = this.checked;
+            const lbl = document.getElementById('autoLabel');
+            lbl.textContent = this.checked ? 'ativado' : 'desativado';
+            lbl.style.color = this.checked ? 'var(--green)' : 'var(--text3)';
         });
 
         document.getElementById('btnConnect').addEventListener('click', async () => {
@@ -455,7 +450,7 @@
             try {
                 await api('POST', '/whatsapp/connect');
             } catch(e) {
-                showErr('Backend offline. Execute "npm start" na pasta do projeto primeiro.');
+                showErr('Erro ao iniciar WhatsApp. Tente novamente.');
                 btn.textContent = 'Conectar WhatsApp';
                 btn.disabled = false;
             }
@@ -531,7 +526,6 @@
             finally { btn.textContent = 'Salvar todos agora'; btn.disabled = false; }
         });
 
-        // Sincronizar histórico
         document.getElementById('btnSync').addEventListener('click', async () => {
             if (state.syncRunning) return;
             if (!state.connected) { toast('Conecte o WhatsApp primeiro', 'amber'); return; }
@@ -583,7 +577,7 @@
 
         async function saveOne(phone) {
             try {
-                const r = await api('POST', '/contacts/save', { phone });
+                const r = await api('POST', '/contacts/save', { contactId: phone });
                 if (r.ok) { toast('Salvo: ' + r.contact.name); await refreshStatus(); }
                 else { toast(r.message || 'Já salvo', 'amber'); }
             } catch(e) { toast('Erro', 'red'); }
@@ -634,6 +628,7 @@
         }
 
         function applyStatus(d) {
+            if (!d) return;
             if (d.status === 'connected') setWAConnected(true);
             if (d.googleConnected) setGoogleConnected(true);
             if (d.icloudConnected) setICloudConnected(true);
@@ -828,30 +823,52 @@
         async function init() {
             updatePreviews();
             connectSSE();
+
             try {
                 const seq = await api('GET', '/sequencer');
                 document.getElementById('prefixInput').value = seq.prefix || 'Contato Zap';
                 document.getElementById('seqInput').value = seq.current || 1;
                 updatePreviews();
-            } catch(e) {}
+            } catch(e) { console.warn('seq:', e); }
+
             try {
-                const [g, ic, st, contacts] = await Promise.all([
-                    api('GET', '/google/status'),
-                    api('GET', '/icloud/status'),
-                    api('GET', '/whatsapp/status'),
-                    api('GET', '/contacts')
-                ]);
+                const g = await api('GET', '/google/status');
                 if (g.connected) setGoogleConnected(true);
+            } catch(e) { console.warn('google:', e); }
+
+            try {
+                const ic = await api('GET', '/icloud/status');
                 if (ic.connected) setICloudConnected(true);
+            } catch(e) { console.warn('icloud:', e); }
+
+            try {
+                const st = await api('GET', '/whatsapp/status');
                 if (st.status === 'connected') setWAConnected(true);
                 applyStatus(st);
-                if (contacts && contacts.length > 0) {
-                    state.contacts = contacts.sort((a, b) => new Date(b.detected_at) - new Date(a.detected_at));
-                    render();
-                }
             } catch(e) {
-                showErr('Backend offline. Execute "npm start" na pasta do projeto.');
+                console.warn('whatsapp:', e);
+                showErr('Falha ao conectar com servidor. Recarregue a página em alguns segundos.');
             }
+
+            try {
+                const contacts = await api('GET', '/contacts');
+                if (contacts && contacts.length > 0) {
+                    const mapped = contacts.map(c => ({
+                        id: c.id,
+                        phone: c.phone,
+                        name: c.name,
+                        pushName: c.push_name,
+                        pending: c.pending,
+                        savedToAgenda: c.saved_to_agenda,
+                        source: c.source,
+                        detected: c.detected_at,
+                        savedAt: c.saved_at
+                    }));
+                    state.contacts = mapped.sort((a, b) => new Date(b.detected || 0) - new Date(a.detected || 0));
+                    renderDashboard();
+                    renderLogs();
+                }
+            } catch(e) { console.warn('contacts:', e); }
         }
 
         init();
