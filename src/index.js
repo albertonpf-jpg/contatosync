@@ -44,6 +44,18 @@ async function dbUpsert(table, data) {
     });
 }
 
+async function dbDelete(table, filters) {
+    let url = SUPABASE_URL + '/rest/v1/' + table + '?';
+    const params = Object.entries(filters).map(([k, v]) => k + '=eq.' + encodeURIComponent(v));
+    url += params.join('&');
+    await axios.delete(url, {
+        headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: 'Bearer ' + SUPABASE_KEY
+        }
+    });
+}
+
 async function loadFromSupabase() {
     try {
         const [contacts, configRows] = await Promise.all([dbGet('contacts'), dbGet('config')]);
@@ -82,6 +94,8 @@ async function saveContact(contact) {
             saved_to_agenda: contact.savedToAgenda || false,
             erro_agenda: contact.erroAgenda || null,
             source: contact.source || 'whatsapp',
+            google_resource_name: contact.googleResourceName || null,
+            icloud_vcard_url: contact.icloudVcardUrl || null,
             detected_at: contact.detected || new Date().toISOString(),
             saved_at: contact.savedAt || new Date().toISOString()
         });
@@ -113,7 +127,10 @@ async function initData() {
             id: c.id, phone: c.phone, name: c.name, pushName: c.push_name,
             pending: c.pending, hasRealPhone: c.has_real_phone,
             savedToAgenda: c.saved_to_agenda, erroAgenda: c.erro_agenda,
-            source: c.source, detected: c.detected_at, savedAt: c.saved_at
+            source: c.source,
+            googleResourceName: c.google_resource_name || null,
+            icloudVcardUrl: c.icloud_vcard_url || null,
+            detected: c.detected_at, savedAt: c.saved_at
         }));
         appState.sequencer = data.sequencer;
         appState.stats.total = appState.contacts.length;
@@ -232,10 +249,42 @@ function restoreGoogleTokens(tokens) {
 async function saveContactToGoogle(phone, name) {
     if (!appState.google.connected || !appState.google.oauth2Client) throw new Error('Google não conectado');
     const peopleApi = google.people({ version: 'v1', auth: appState.google.oauth2Client });
-    await peopleApi.people.createContact({
+    const res = await peopleApi.people.createContact({
         requestBody: { names: [{ givenName: name }], phoneNumbers: [{ value: phone, type: 'mobile' }] }
     });
+    return res.data.resourceName || null;
+}
+
+async function deleteContactFromGoogle(resourceName) {
+    if (!appState.google.connected || !appState.google.oauth2Client) throw new Error('Google não conectado');
+    if (!resourceName) throw new Error('resourceName ausente');
+    const peopleApi = google.people({ version: 'v1', auth: appState.google.oauth2Client });
+    await peopleApi.people.deleteContact({ resourceName });
     return true;
+}
+
+// Busca resourceName pelo telefone (fallback quando não está salvo)
+async function findGoogleResourceByPhone(phone) {
+    if (!appState.google.connected || !appState.google.oauth2Client) return null;
+    try {
+        const peopleApi = google.people({ version: 'v1', auth: appState.google.oauth2Client });
+        const res = await peopleApi.people.searchContacts({ query: phone.replace('+', ''), readMask: 'phoneNumbers', pageSize: 5 });
+        const results = res.data.results || [];
+        const cleanTarget = phone.replace(/\D/g, '');
+        for (const r of results) {
+            const phones = r.person?.phoneNumbers || [];
+            for (const p of phones) {
+                const clean = (p.value || '').replace(/\D/g, '');
+                if (clean === cleanTarget || clean.endsWith(cleanTarget.slice(-8))) {
+                    return r.person.resourceName;
+                }
+            }
+        }
+        return null;
+    } catch (e) {
+        debugLog('Erro ao buscar resource Google: ' + e.message);
+        return null;
+    }
 }
 
 async function isPhoneInGoogle(phone) {
@@ -276,13 +325,11 @@ async function isPhoneInICloud(phone) {
 }
 
 // =============================================
-// ICLOUD CardDAV — salvamento implementado
+// ICLOUD CardDAV
 // =============================================
 
-// Descobre a URL real do addressbook do iCloud via PROPFIND
 async function discoverICloudAddressBook(appleId, appPassword) {
     try {
-        // Passo 1: descobrir o principal do usuario
         const principalResp = await axios({
             method: 'PROPFIND',
             url: 'https://contacts.icloud.com/',
@@ -298,10 +345,8 @@ async function discoverICloudAddressBook(appleId, appPassword) {
 
         if (principalResp.status === 401) throw new Error('Credenciais inválidas');
 
-        // Extrair href do principal
         const principalMatch = principalResp.data.match(/<[^>]*href[^>]*>([^<]+)<\/[^>]*href>/i);
         if (!principalMatch) {
-            // Fallback: tentar URL direta com ID da conta
             const accountId = appleId.replace('@', '%40');
             return 'https://contacts.icloud.com/' + accountId + '/carddavhome/card/';
         }
@@ -309,7 +354,6 @@ async function discoverICloudAddressBook(appleId, appPassword) {
         let principalHref = principalMatch[1].trim();
         debugLog('iCloud principal href: ' + principalHref);
 
-        // Passo 2: descobrir o home set do carddav
         const homeSetResp = await axios({
             method: 'PROPFIND',
             url: principalHref.startsWith('http') ? principalHref : 'https://contacts.icloud.com' + principalHref,
@@ -330,14 +374,12 @@ async function discoverICloudAddressBook(appleId, appPassword) {
         return homeHref;
     } catch (e) {
         debugLog('Erro ao descobrir addressbook: ' + e.message);
-        // Fallback seguro
         const numericId = appleId.split('@')[0];
         return 'https://contacts.icloud.com/' + numericId + '/carddavhome/card/';
     }
 }
 
 async function connectICloud(appleId, appPassword) {
-    // Verificar credenciais com PROPFIND simples
     const response = await axios({
         method: 'PROPFIND',
         url: 'https://contacts.icloud.com/',
@@ -351,7 +393,6 @@ async function connectICloud(appleId, appPassword) {
     if (response.status === 401) throw new Error('Credenciais inválidas. Verifique seu Apple ID e a App-Specific Password.');
     if (response.status !== 207 && response.status !== 200) throw new Error('Resposta inesperada do iCloud: ' + response.status);
 
-    // Descobrir URL do addressbook
     debugLog('Descobrindo addressbook do iCloud...');
     const addressBookUrl = await discoverICloudAddressBook(appleId, appPassword);
     debugLog('iCloud addressBook URL: ' + addressBookUrl);
@@ -366,17 +407,13 @@ async function connectICloud(appleId, appPassword) {
     return { ok: true, message: 'iCloud conectado com sucesso' };
 }
 
-// Salva contato no iCloud via CardDAV (PUT com vCard)
 async function saveContactToICloud(phone, name) {
     if (!appState.icloud.connected || !appState.icloud.appleId || !appState.icloud.appPassword) {
         throw new Error('iCloud não conectado');
     }
 
-    // Gerar UID único para o contato
     const uid = 'contatosync-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9).toUpperCase();
 
-    // Montar vCard 3.0
-    const firstName = name.split(' - ')[1] || name; // extrair nome real se houver "Contato Zap 1 - Alberto"
     const vcard = [
         'BEGIN:VCARD',
         'VERSION:3.0',
@@ -397,7 +434,7 @@ async function saveContactToICloud(phone, name) {
         auth: { username: appState.icloud.appleId, password: appState.icloud.appPassword },
         headers: {
             'Content-Type': 'text/vcard; charset=utf-8',
-            'If-None-Match': '*'  // cria novo, não sobrescreve
+            'If-None-Match': '*'
         },
         data: vcard,
         timeout: 15000,
@@ -405,7 +442,146 @@ async function saveContactToICloud(phone, name) {
     });
 
     debugLog('Contato salvo no iCloud: ' + name + ' (' + phone + ')');
+    return contactUrl;
+}
+
+async function deleteContactFromICloud(vcardUrl) {
+    if (!appState.icloud.connected || !appState.icloud.appleId || !appState.icloud.appPassword) {
+        throw new Error('iCloud não conectado');
+    }
+    if (!vcardUrl) throw new Error('vcardUrl ausente');
+
+    debugLog('Deletando do iCloud: ' + vcardUrl);
+
+    const response = await axios({
+        method: 'DELETE',
+        url: vcardUrl,
+        auth: { username: appState.icloud.appleId, password: appState.icloud.appPassword },
+        timeout: 15000,
+        validateStatus: (s) => s < 500
+    });
+
+    if (response.status >= 400 && response.status !== 404) {
+        throw new Error('iCloud DELETE retornou status ' + response.status);
+    }
+
+    debugLog('Contato deletado do iCloud: ' + vcardUrl);
     return true;
+}
+
+// Busca vCard URL pelo telefone (fallback quando não está salvo)
+async function findICloudVcardByPhone(phone) {
+    if (!appState.icloud.connected || !appState.icloud.addressBookUrl) return null;
+    try {
+        const cleanPhone = phone.replace(/\D/g, '');
+        const reportXml = `<?xml version="1.0" encoding="utf-8"?>
+<C:addressbook-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
+    <D:prop><D:getetag/><C:address-data/></D:prop>
+    <C:filter>
+        <C:prop-filter name="TEL">
+            <C:text-match collation="i;unicode-casemap" match-type="contains">${cleanPhone.slice(-8)}</C:text-match>
+        </C:prop-filter>
+    </C:filter>
+</C:addressbook-query>`;
+
+        const response = await axios({
+            method: 'REPORT',
+            url: appState.icloud.addressBookUrl,
+            auth: { username: appState.icloud.appleId, password: appState.icloud.appPassword },
+            headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Depth': '1' },
+            data: reportXml,
+            timeout: 10000,
+            validateStatus: (s) => s < 500
+        });
+
+        if (!response.data) return null;
+
+        // Extrair primeiro href da resposta
+        const hrefMatch = response.data.match(/<[^>]*href[^>]*>([^<]+\.vcf)<\/[^>]*href>/i);
+        if (!hrefMatch) return null;
+
+        let href = hrefMatch[1].trim();
+        if (!href.startsWith('http')) {
+            const baseUrl = new URL(appState.icloud.addressBookUrl);
+            href = baseUrl.origin + href;
+        }
+        return href;
+    } catch (e) {
+        debugLog('Erro ao buscar vCard iCloud: ' + e.message);
+        return null;
+    }
+}
+
+// =============================================
+// DELETE CONTATO — função central
+// =============================================
+async function deleteContactEverywhere(contact) {
+    const errors = [];
+    let googleOk = false;
+    let icloudOk = false;
+
+    // Google
+    if (appState.google.connected) {
+        try {
+            let resourceName = contact.googleResourceName;
+            if (!resourceName) {
+                debugLog('resourceName ausente, buscando por telefone: ' + contact.phone);
+                resourceName = await findGoogleResourceByPhone(contact.phone);
+            }
+            if (resourceName) {
+                await deleteContactFromGoogle(resourceName);
+                googleOk = true;
+                debugLog('Deletado Google: ' + resourceName);
+            } else {
+                debugLog('Contato não encontrado no Google: ' + contact.phone);
+                googleOk = true; // não existe, considera sucesso
+            }
+        } catch (e) {
+            errors.push('Google: ' + e.message);
+            debugLog('Erro delete Google: ' + e.message);
+        }
+    }
+
+    // iCloud
+    if (appState.icloud.connected) {
+        try {
+            let vcardUrl = contact.icloudVcardUrl;
+            if (!vcardUrl) {
+                debugLog('vcardUrl ausente, buscando por telefone: ' + contact.phone);
+                vcardUrl = await findICloudVcardByPhone(contact.phone);
+            }
+            if (vcardUrl) {
+                await deleteContactFromICloud(vcardUrl);
+                icloudOk = true;
+            } else {
+                debugLog('Contato não encontrado no iCloud: ' + contact.phone);
+                icloudOk = true;
+            }
+        } catch (e) {
+            errors.push('iCloud: ' + e.message);
+            debugLog('Erro delete iCloud: ' + e.message);
+        }
+    }
+
+    // Supabase — sempre apagar
+    try {
+        await dbDelete('contacts', { id: contact.id });
+        debugLog('Deletado Supabase: ' + contact.id);
+    } catch (e) {
+        errors.push('Supabase: ' + e.message);
+        debugLog('Erro delete Supabase: ' + e.message);
+        throw new Error('Falha ao deletar do Supabase: ' + e.message);
+    }
+
+    // Remover do estado em memória
+    const idx = appState.contacts.findIndex(c => c.id === contact.id);
+    if (idx >= 0) {
+        appState.contacts.splice(idx, 1);
+        appState.stats.total = appState.contacts.length;
+        appState.stats.pending = appState.contacts.filter(c => c.pending).length;
+    }
+
+    return { googleOk, icloudOk, errors };
 }
 
 // =============================================
@@ -485,21 +661,29 @@ async function syncHistory() {
 
                 let savedAgenda = false;
                 let erroAgenda = null;
+                let googleResourceName = null;
+                let icloudVcardUrl = null;
 
                 if (appState.google.connected && !jaNoGoogle) {
-                    try { await saveContactToGoogle(phone, name); savedAgenda = true; }
+                    try {
+                        googleResourceName = await saveContactToGoogle(phone, name);
+                        savedAgenda = true;
+                    }
                     catch (e) { erroAgenda = 'Google: ' + e.message; appState.sync.errors++; }
                 }
 
                 if (appState.icloud.connected && !jaNoICloud) {
-                    try { await saveContactToICloud(phone, name); savedAgenda = true; }
+                    try {
+                        icloudVcardUrl = await saveContactToICloud(phone, name);
+                        savedAgenda = true;
+                    }
                     catch (e) {
                         erroAgenda = (erroAgenda ? erroAgenda + ' | ' : '') + 'iCloud: ' + e.message;
                         appState.sync.errors++;
                     }
                 }
 
-                const contact = { id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6), phone, name, pushName: chat.name || null, pending: false, hasRealPhone: true, savedToAgenda: savedAgenda, erroAgenda: erroAgenda || null, detected: new Date().toISOString(), savedAt: new Date().toISOString(), source: 'sync' };
+                const contact = { id: 'contact_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6), phone, name, pushName: chat.name || null, pending: false, hasRealPhone: true, savedToAgenda: savedAgenda, erroAgenda: erroAgenda || null, googleResourceName, icloudVcardUrl, detected: new Date().toISOString(), savedAt: new Date().toISOString(), source: 'sync' };
                 appState.contacts.push(contact);
                 await saveContact(contact);
                 appState.stats.total++;
@@ -623,14 +807,22 @@ async function initWhatsApp() {
 
                 let savedAgenda = false;
                 let erroAgenda = null;
+                let googleResourceName = null;
+                let icloudVcardUrl = null;
 
                 if (appState.google.connected && !jaNoGoogle) {
-                    try { await saveContactToGoogle(phone, name); savedAgenda = true; }
+                    try {
+                        googleResourceName = await saveContactToGoogle(phone, name);
+                        savedAgenda = true;
+                    }
                     catch (e) { erroAgenda = 'Google: ' + e.message; debugLog('Erro Google: ' + e.message); }
                 }
 
                 if (appState.icloud.connected && !jaNoICloud) {
-                    try { await saveContactToICloud(phone, name); savedAgenda = true; }
+                    try {
+                        icloudVcardUrl = await saveContactToICloud(phone, name);
+                        savedAgenda = true;
+                    }
                     catch (e) {
                         erroAgenda = (erroAgenda ? erroAgenda + ' | ' : '') + 'iCloud: ' + e.message;
                         debugLog('Erro iCloud: ' + e.message);
@@ -642,6 +834,7 @@ async function initWhatsApp() {
                     phone, name, pushName: msg.pushName || null,
                     pending: false, hasRealPhone: true,
                     savedToAgenda: savedAgenda, erroAgenda: erroAgenda || null,
+                    googleResourceName, icloudVcardUrl,
                     detected: new Date().toISOString(), savedAt: new Date().toISOString(),
                     source: 'whatsapp'
                 };
@@ -794,10 +987,14 @@ app.post('/contacts/save', async (req, res) => {
 
     const name = buildContactName(contact.pushName || null);
     if (appState.google.connected && !jaNoGoogle) {
-        try { await saveContactToGoogle(contact.phone, name); } catch (e) { debugLog('Erro Google: ' + e.message); }
+        try {
+            contact.googleResourceName = await saveContactToGoogle(contact.phone, name);
+        } catch (e) { debugLog('Erro Google: ' + e.message); }
     }
     if (appState.icloud.connected && !jaNoICloud) {
-        try { await saveContactToICloud(contact.phone, name); } catch (e) { debugLog('Erro iCloud: ' + e.message); }
+        try {
+            contact.icloudVcardUrl = await saveContactToICloud(contact.phone, name);
+        } catch (e) { debugLog('Erro iCloud: ' + e.message); }
     }
     contact.name = name;
     contact.pending = false;
@@ -820,8 +1017,12 @@ app.post('/contacts/save-all', async (req, res) => {
         const jaNoICloud = appState.icloud.connected ? await isPhoneInICloud(c.phone) : false;
 
         const name = buildContactName(c.pushName || null);
-        if (appState.google.connected && !jaNoGoogle) { try { await saveContactToGoogle(c.phone, name); } catch (e) {} }
-        if (appState.icloud.connected && !jaNoICloud) { try { await saveContactToICloud(c.phone, name); } catch (e) {} }
+        if (appState.google.connected && !jaNoGoogle) {
+            try { c.googleResourceName = await saveContactToGoogle(c.phone, name); } catch (e) {}
+        }
+        if (appState.icloud.connected && !jaNoICloud) {
+            try { c.icloudVcardUrl = await saveContactToICloud(c.phone, name); } catch (e) {}
+        }
         c.name = name;
         c.pending = false;
         c.savedAt = new Date().toISOString();
@@ -834,6 +1035,33 @@ app.post('/contacts/save-all', async (req, res) => {
     appState.stats.pending = 0;
     appState.stats.savedToday += saved;
     res.json({ ok: true, saved, message: saved + ' contatos salvos' });
+});
+
+// =============================================
+// DELETE CONTATO — nova rota
+// =============================================
+app.delete('/contacts/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const contact = appState.contacts.find(c => c.id === id || c.phone === id);
+        if (!contact) return res.status(404).json({ ok: false, message: 'Contato não encontrado' });
+
+        log('Deletando contato: ' + (contact.name || contact.phone));
+        const result = await deleteContactEverywhere(contact);
+
+        broadcast('contact-deleted', { id: contact.id, phone: contact.phone });
+
+        res.json({
+            ok: true,
+            message: 'Contato deletado',
+            googleOk: result.googleOk,
+            icloudOk: result.icloudOk,
+            errors: result.errors
+        });
+    } catch (e) {
+        log('Erro ao deletar: ' + e.message, 'error');
+        res.status(500).json({ ok: false, error: e.message });
+    }
 });
 
 app.get('/events', (req, res) => {
