@@ -74,11 +74,15 @@
         .btn-outline:hover:not(:disabled){border-color:var(--border3);color:var(--text)}
         .btn-danger{background:transparent;border:1px solid var(--border2);color:var(--text2)}
         .btn-danger:hover:not(:disabled){border-color:var(--red);color:var(--red)}
+        .btn-red{background:var(--red);color:#fff}
+        .btn-red:hover:not(:disabled){filter:brightness(1.15)}
         .btn-amber{background:var(--amber);color:#fff}
         .btn-amber:hover:not(:disabled){filter:brightness(1.1)}
         .btn-purple{background:#7c3aed;color:#fff}
         .btn-purple:hover:not(:disabled){background:#6d28d9}
         .btn-sm{padding:6px 13px;font-size:11px}
+        .btn-icon{padding:6px 9px;font-size:13px;background:transparent;border:1px solid var(--border2);color:var(--text3);border-radius:7px}
+        .btn-icon:hover:not(:disabled){border-color:var(--red);color:var(--red);background:rgba(224,82,82,.05)}
         .btn-full{width:100%}
 
         .status-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:6px 12px;border-radius:8px;margin-bottom:1rem}
@@ -143,6 +147,7 @@
         .ci.pending{border-left:3px solid var(--amber)}
         .ci.saved{border-left:3px solid var(--green);animation:fadeIn .3s ease}
         .ci.sync{border-left:3px solid #7c3aed}
+        .ci.deleting{opacity:.4;pointer-events:none}
         @keyframes fadeIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
         .cav{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0}
         .cav.p{background:rgba(240,165,0,.1);color:var(--amber)}
@@ -156,6 +161,7 @@
         .tag-manual{background:rgba(37,211,102,.08);color:var(--green);border:1px solid rgba(37,211,102,.15)}
         .tag-pending{background:rgba(240,165,0,.1);color:var(--amber);border:1px solid rgba(240,165,0,.2)}
         .tag-sync{background:rgba(124,58,237,.1);color:#a78bfa;border:1px solid rgba(124,58,237,.2)}
+        .cactions{display:flex;align-items:center;gap:6px;flex-shrink:0}
 
         .log-item{display:flex;align-items:flex-start;gap:10px;padding:.75rem 1rem;background:var(--bg2);border:1px solid var(--border);border-radius:10px;font-size:12px;margin-bottom:6px}
         .log-time{color:var(--text3);white-space:nowrap;font-family:monospace;font-size:11px}
@@ -183,6 +189,15 @@
         .apple-note a{color:var(--blue)}
 
         .preview-text{font-size:11px;color:var(--green);margin-top:5px}
+
+        .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:200;padding:1rem}
+        .modal-backdrop.show{display:flex}
+        .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:1.75rem;max-width:420px;width:100%}
+        .modal-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:.5rem}
+        .modal-text{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:1.25rem}
+        .modal-text strong{color:var(--text)}
+        .modal-warning{background:rgba(224,82,82,.08);border:1px solid rgba(224,82,82,.2);border-radius:8px;padding:.75rem 1rem;font-size:12px;color:var(--red);margin-bottom:1.25rem;line-height:1.5}
+        .modal-actions{display:flex;gap:.75rem;justify-content:flex-end}
 
         @media(max-width:700px){.sidebar{display:none}.setup-grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}}
     </style>
@@ -385,6 +400,23 @@
         </main>
     </div>
 
+    <!-- MODAL CONFIRMAÇÃO DELETE -->
+    <div class="modal-backdrop" id="deleteModal">
+        <div class="modal">
+            <div class="modal-title">Deletar contato?</div>
+            <div class="modal-text">
+                Você vai apagar <strong id="deleteName">—</strong> (<span id="deletePhone">—</span>).
+            </div>
+            <div class="modal-warning">
+                ⚠️ Essa ação também apaga o contato da sua agenda do Google e/ou iCloud. Não tem como desfazer.
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline btn-sm" id="btnCancelDelete">Cancelar</button>
+                <button class="btn btn-red btn-sm" id="btnConfirmDelete">Sim, deletar</button>
+            </div>
+        </div>
+    </div>
+
     <div class="toast" id="toast"></div>
 
     <script>
@@ -397,7 +429,8 @@
             contacts: [],
             logs: [],
             savedCount: 0,
-            syncRunning: false
+            syncRunning: false,
+            deleteTarget: null
         };
 
         const TITLES = {
@@ -583,6 +616,72 @@
             } catch(e) { toast('Erro', 'red'); }
         }
 
+        // ============================================
+        // DELETE
+        // ============================================
+        function askDelete(id) {
+            const contact = state.contacts.find(c => c.id === id || c.phone === id);
+            if (!contact) return;
+            state.deleteTarget = contact;
+            document.getElementById('deleteName').textContent = contact.name || 'Sem nome';
+            document.getElementById('deletePhone').textContent = contact.phone;
+            document.getElementById('deleteModal').classList.add('show');
+        }
+
+        document.getElementById('btnCancelDelete').addEventListener('click', () => {
+            state.deleteTarget = null;
+            document.getElementById('deleteModal').classList.remove('show');
+        });
+
+        document.getElementById('deleteModal').addEventListener('click', (e) => {
+            if (e.target.id === 'deleteModal') {
+                state.deleteTarget = null;
+                document.getElementById('deleteModal').classList.remove('show');
+            }
+        });
+
+        document.getElementById('btnConfirmDelete').addEventListener('click', async () => {
+            if (!state.deleteTarget) return;
+            const contact = state.deleteTarget;
+            const btn = document.getElementById('btnConfirmDelete');
+            btn.textContent = 'Deletando...';
+            btn.disabled = true;
+
+            // Marcar visualmente
+            const card = document.querySelector('[data-contact-id="' + contact.id + '"]');
+            if (card) card.classList.add('deleting');
+
+            try {
+                const r = await api('DELETE', '/contacts/' + encodeURIComponent(contact.id));
+                if (r.ok) {
+                    // Remover do state
+                    state.contacts = state.contacts.filter(c => c.id !== contact.id);
+                    state.logs = state.logs.filter(c => c.id !== contact.id);
+
+                    let msg = 'Contato deletado';
+                    if (r.errors && r.errors.length > 0) {
+                        msg = 'Deletado com avisos: ' + r.errors.join(' | ');
+                        toast(msg, 'amber');
+                    } else {
+                        toast(msg);
+                    }
+                    renderDashboard();
+                    renderLogs();
+                } else {
+                    toast(r.error || r.message || 'Erro ao deletar', 'red');
+                    if (card) card.classList.remove('deleting');
+                }
+            } catch(e) {
+                toast('Erro ao deletar: ' + e.message, 'red');
+                if (card) card.classList.remove('deleting');
+            }
+
+            btn.textContent = 'Sim, deletar';
+            btn.disabled = false;
+            state.deleteTarget = null;
+            document.getElementById('deleteModal').classList.remove('show');
+        });
+
         function connectSSE() {
             const es = new EventSource(API + '/events');
             es.addEventListener('status', e => applyStatus(JSON.parse(e.data)));
@@ -598,6 +697,13 @@
             });
             es.addEventListener('disconnected', () => { setWAConnected(false); clearQR(); });
             es.addEventListener('contact', e => handleNewContact(JSON.parse(e.data)));
+            es.addEventListener('contact-deleted', e => {
+                const d = JSON.parse(e.data);
+                state.contacts = state.contacts.filter(c => c.id !== d.id);
+                state.logs = state.logs.filter(c => c.id !== d.id);
+                renderDashboard();
+                renderLogs();
+            });
             es.addEventListener('agenda-update', e => {
                 const d = JSON.parse(e.data);
                 if (d.google !== undefined) setGoogleConnected(d.google);
@@ -734,6 +840,10 @@
             document.getElementById('qrContainer').innerHTML = '<div class="qr-ph"><p>Clique em "Conectar"<br>para gerar o QR Code</p></div>';
         }
 
+        function escapeHtml(s) {
+            return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
         function renderDashboard() {
             const pending = state.contacts.filter(c => c.pending);
             document.getElementById('mTotal').textContent = state.contacts.length;
@@ -759,14 +869,19 @@
                 const d = document.createElement('div');
                 const isSync = c.source === 'sync' || c.source === 'sync-existing';
                 d.className = 'ci ' + (c.pending ? 'pending' : isSync ? 'sync' : 'saved');
+                d.setAttribute('data-contact-id', c.id);
                 const init = c.name ? c.name.split(' ').filter(Boolean).slice(0,2).map(w => w[0]).join('') : '?';
                 const cavClass = c.pending ? 'p' : isSync ? 'sy' : 's';
                 let tag;
                 if (c.pending) tag = '<span class="ctag tag-pending">Pendente</span>';
                 else if (isSync) tag = '<span class="ctag tag-sync">Histórico</span>';
                 else tag = '<span class="ctag tag-auto">Auto-salvo</span>';
-                const action = c.pending ? `<button class="btn btn-amber btn-sm" onclick="saveOne('${c.phone}')">Salvar</button>` : '';
-                d.innerHTML = `<div class="cav ${cavClass}">${init}</div><div class="cinfo"><div class="cn">${c.name || c.phone}</div><div class="cp">${c.name ? c.phone : ''}</div></div>${tag}${action}`;
+
+                const safeId = escapeHtml(c.id);
+                const saveBtn = c.pending ? `<button class="btn btn-amber btn-sm" onclick="saveOne('${escapeHtml(c.phone)}')">Salvar</button>` : '';
+                const delBtn = `<button class="btn-icon" onclick="askDelete('${safeId}')" title="Deletar contato">🗑️</button>`;
+
+                d.innerHTML = `<div class="cav ${cavClass}">${init}</div><div class="cinfo"><div class="cn">${escapeHtml(c.name || c.phone)}</div><div class="cp">${c.name ? escapeHtml(c.phone) : ''}</div></div>${tag}<div class="cactions">${saveBtn}${delBtn}</div>`;
                 list.appendChild(d);
             });
         }
@@ -785,7 +900,7 @@
                 d.className = 'log-item';
                 const t = c.savedAt ? new Date(c.savedAt).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '--:--';
                 const src = c.source === 'sync' ? 'histórico' : c.source === 'auto' ? 'automático' : 'manual';
-                d.innerHTML = `<span class="log-time">${t}</span><span class="log-msg">Salvo <span class="hl">${c.name}</span> · ${c.phone} · <span class="ha">${src}</span></span>`;
+                d.innerHTML = `<span class="log-time">${t}</span><span class="log-msg">Salvo <span class="hl">${escapeHtml(c.name)}</span> · ${escapeHtml(c.phone)} · <span class="ha">${src}</span></span>`;
                 l.appendChild(d);
             });
         }
@@ -861,6 +976,8 @@
                         pending: c.pending,
                         savedToAgenda: c.saved_to_agenda,
                         source: c.source,
+                        googleResourceName: c.google_resource_name,
+                        icloudVcardUrl: c.icloud_vcard_url,
                         detected: c.detected_at,
                         savedAt: c.saved_at
                     }));
