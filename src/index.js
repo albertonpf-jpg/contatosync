@@ -914,25 +914,15 @@ async function scheduleAutoReply(jid, phone) {
             const chosenText = variations[Math.floor(Math.random() * variations.length)];
 
             const phoneClean = cfg.vcard_phone.replace(/\D/g, '');
-            const nameParts = cfg.vcard_name.trim().split(' ');
-            const lastName = nameParts.length > 1 ? nameParts.pop() : '';
-            const firstName = nameParts.join(' ');
-            const vcard = [
-                'BEGIN:VCARD',
-                'VERSION:3.0',
-                'N:' + lastName + ';' + firstName + ';;;',
-                'FN:' + cfg.vcard_name,
-                'ORG:' + cfg.vcard_org + ';',
-                'TEL;type=CELL;type=VOICE;waid=' + phoneClean + ':' + cfg.vcard_phone,
-                'END:VCARD'
-            ].join('\n');
+            const vcard = 'BEGIN:VCARD\nVERSION:3.0\nFN:' + cfg.vcard_name + '\nORG:' + cfg.vcard_org + '\nTEL;type=CELL;type=VOICE;waid=' + phoneClean + ':' + cfg.vcard_phone + '\nEND:VCARD';
 
             await appState.whatsapp.socket.sendMessage(jid, { text: chosenText });
             await delay(1500);
             await appState.whatsapp.socket.sendMessage(jid, {
-                document: Buffer.from(vcard, 'utf-8'),
-                mimetype: 'text/x-vcard',
-                fileName: cfg.vcard_name.replace(/\s+/g, '_') + '.vcf'
+                contacts: {
+                    displayName: cfg.vcard_name,
+                    contacts: [{ displayName: cfg.vcard_name, vcard }]
+                }
             });
 
             await dbUpsert('auto_reply_log', { phone, sent_at: new Date().toISOString(), status: 'sent' });
