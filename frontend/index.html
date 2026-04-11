@@ -1020,7 +1020,8 @@
 
         async function loadAR(){
             try{
-                const c = await api('GET','/auto-reply/config'); if(!c) return;
+                const r = await api('GET','/auto-reply/config'); if(!r||!r.config) return;
+                const c = r.config;
                 document.getElementById('arEnabled').checked = !!c.enabled;
                 document.getElementById('arVName').value = c.vcard_name||'';
                 document.getElementById('arVPhone').value = c.vcard_phone||'';
@@ -1032,7 +1033,7 @@
                 document.getElementById('arLimit').value = c.daily_limit;
                 document.getElementById('arMin').value = c.min_delay_sec;
                 document.getElementById('arMax').value = c.max_delay_sec;
-                document.getElementById('arSentToday').value = c.sent_today||0;
+                document.getElementById('arSentToday').value = r.sentToday||0;
             }catch(e){console.warn('ar:',e);}
         }
         document.getElementById('arSave').addEventListener('click', async () => {
