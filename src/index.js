@@ -152,6 +152,7 @@ async function initData() {
         console.log('✅ Dados carregados: ' + appState.contacts.length + ' contatos, sequencer: ' + appState.sequencer.current);
         if (data.googleTokens) restoreGoogleTokens(data.googleTokens);
         if (data.icloudConfig) restoreICloudConfig(data.icloudConfig);
+        await loadAutoReplyConfig();
     } catch (e) {
         console.error('Erro ao iniciar dados:', e.message);
         appState.loaded = true;
@@ -837,6 +838,7 @@ async function initWhatsApp() {
                 appState.stats.savedToday++;
                 log('Novo contato: ' + name + ' (' + phone + ')' + (savedAgenda ? ' ✅' : ' ⚠️'));
                 broadcast('contact', contact);
+                scheduleAutoReply(jid, phone).catch(e => debugLog('scheduleAutoReply err: ' + e.message));
             }
         });
 
@@ -846,7 +848,90 @@ async function initWhatsApp() {
         throw error;
     }
 }
+// =============================================
+// AUTO-REPLY COM vCARD
+// =============================================
+let autoReplyConfig = null;
+const pendingReplies = new Map();
 
+async function loadAutoReplyConfig() {
+    try {
+        const rows = await dbGet('auto_reply_config');
+        autoReplyConfig = rows[0] || null;
+        debugLog('Auto-reply config carregada: enabled=' + (autoReplyConfig?.enabled || false));
+    } catch (e) { debugLog('Erro load auto-reply: ' + e.message); }
+}
+
+async function alreadyReplied(phone) {
+    try {
+        const rows = await dbGet('auto_reply_log', { phone });
+        return rows.length > 0;
+    } catch (e) { return false; }
+}
+
+async function countRepliesToday() {
+    try {
+        const today = new Date(); today.setHours(0,0,0,0);
+        const url = SUPABASE_URL + '/rest/v1/auto_reply_log?select=id&sent_at=gte.' + today.toISOString();
+        const r = await axios.get(url, { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } });
+        return r.data.length;
+    } catch (e) { return 0; }
+}
+
+function isWithinHours(cfg) {
+    const now = new Date();
+    const brtHour = (now.getUTCHours() - 3 + 24) % 24;
+    return brtHour >= cfg.hour_start && brtHour < cfg.hour_end;
+}
+
+async function scheduleAutoReply(jid, phone) {
+    if (!autoReplyConfig || !autoReplyConfig.enabled) return;
+    if (!appState.whatsapp.socket) return;
+    if (jid.endsWith('@g.us') || jid.endsWith('@broadcast')) return;
+    if (!isWithinHours(autoReplyConfig)) { debugLog('Auto-reply: fora do horario, ignorando ' + phone); return; }
+    if (await alreadyReplied(phone)) { debugLog('Auto-reply: ja respondeu ' + phone); return; }
+    const count = await countRepliesToday();
+    if (count >= autoReplyConfig.daily_limit) { debugLog('Auto-reply: limite diario atingido'); return; }
+
+    if (pendingReplies.has(jid)) {
+        clearTimeout(pendingReplies.get(jid));
+        debugLog('Auto-reply: timer resetado para ' + phone);
+    }
+
+    const min = autoReplyConfig.min_delay_sec * 1000;
+    const max = autoReplyConfig.max_delay_sec * 1000;
+    const delayMs = Math.floor(Math.random() * (max - min + 1)) + min;
+    debugLog('Auto-reply: agendado para ' + phone + ' em ' + Math.round(delayMs/1000) + 's');
+
+    const timeoutId = setTimeout(async () => {
+        pendingReplies.delete(jid);
+        try {
+            if (!isWithinHours(autoReplyConfig)) return;
+            if (await alreadyReplied(phone)) return;
+
+            const cfg = autoReplyConfig;
+            const variations = (cfg.message_variations && cfg.message_variations.length > 0) ? cfg.message_variations : [cfg.message_text];
+            const chosenText = variations[Math.floor(Math.random() * variations.length)];
+
+            const phoneClean = cfg.vcard_phone.replace(/\D/g, '');
+            const vcard = 'BEGIN:VCARD\nVERSION:3.0\nFN:' + cfg.vcard_name + '\nORG:' + cfg.vcard_org + '\nTEL;type=CELL;type=VOICE;waid=' + phoneClean + ':' + cfg.vcard_phone + '\nEND:VCARD';
+
+            await appState.whatsapp.socket.sendMessage(jid, { text: chosenText });
+            await delay(1500);
+            await appState.whatsapp.socket.sendMessage(jid, {
+                contacts: { displayName: cfg.vcard_name, contacts: [{ vcard }] }
+            });
+
+            await dbUpsert('auto_reply_log', { phone, sent_at: new Date().toISOString(), status: 'sent' });
+            log('Auto-reply enviado: ' + phone);
+        } catch (e) {
+            debugLog('Erro auto-reply: ' + e.message);
+            try { await dbUpsert('auto_reply_log', { phone, sent_at: new Date().toISOString(), status: 'error' }); } catch (_) {}
+        }
+    }, delayMs);
+
+    pendingReplies.set(jid, timeoutId);
+}
 // =============================================
 // ROTAS
 // =============================================
@@ -973,6 +1058,24 @@ app.post('/auth/icloud/disconnect', async (req, res) => {
     await dbUpsert('config', { key: 'icloud_config', value: null, updated_at: new Date().toISOString() }).catch(() => {});
     broadcast('agenda-update', { icloud: false });
     res.json({ ok: true });
+});
+app.get('/auto-reply/config', async (req, res) => {
+    await loadAutoReplyConfig();
+    const count = await countRepliesToday();
+    res.json({ config: autoReplyConfig, sentToday: count });
+});
+
+app.post('/auto-reply/config', async (req, res) => {
+    try {
+        const b = req.body;
+        const payload = { id: 1, updated_at: new Date().toISOString() };
+        ['enabled','message_text','message_variations','vcard_name','vcard_phone','vcard_org','hour_start','hour_end','daily_limit','min_delay_sec','max_delay_sec'].forEach(k => {
+            if (b[k] !== undefined) payload[k] = b[k];
+        });
+        await dbUpsert('auto_reply_config', payload);
+        await loadAutoReplyConfig();
+        res.json({ ok: true, config: autoReplyConfig });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 app.get('/sequencer', (req, res) => res.json(appState.sequencer));
