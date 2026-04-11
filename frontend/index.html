@@ -336,6 +336,36 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="card full" id="cardAutoReply">
+                            <div class="card-header">
+                                <div class="card-icon ci-green">🤖</div>
+                                <div><div class="card-title">Auto-resposta vCard</div><div class="card-desc">Envia vCard Planned após 1ª mensagem do lead</div></div>
+                            </div>
+                            <div class="toggle-row" style="border-top:none;padding-top:0;margin-bottom:1rem">
+                                <div><div class="toggle-label">Ativar auto-resposta</div><div class="toggle-sub">Delay aleatório, horário comercial, limite diário</div></div>
+                                <label class="tgl"><input type="checkbox" id="arEnabled"><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1rem">
+                                <div class="field" style="margin:0"><label>vCard Nome</label><div class="irow"><input type="text" id="arVName"></div></div>
+                                <div class="field" style="margin:0"><label>vCard Telefone</label><div class="irow"><input type="text" id="arVPhone"></div></div>
+                                <div class="field" style="margin:0"><label>vCard Empresa</label><div class="irow"><input type="text" id="arVOrg"></div></div>
+                            </div>
+                            <div class="field"><label>Variação 1</label><div class="irow"><input type="text" id="arV1"></div></div>
+                            <div class="field"><label>Variação 2</label><div class="irow"><input type="text" id="arV2"></div></div>
+                            <div class="field"><label>Variação 3</label><div class="irow"><input type="text" id="arV3"></div></div>
+                            <div class="field"><label>Variação 4</label><div class="irow"><input type="text" id="arV4"></div></div>
+                            <div class="field"><label>Variação 5</label><div class="irow"><input type="text" id="arV5"></div></div>
+                            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:.75rem;margin-bottom:1rem">
+                                <div class="field" style="margin:0"><label>Início (h)</label><div class="irow"><input type="number" id="arHStart" min="0" max="23"></div></div>
+                                <div class="field" style="margin:0"><label>Fim (h)</label><div class="irow"><input type="number" id="arHEnd" min="0" max="23"></div></div>
+                                <div class="field" style="margin:0"><label>Limite/dia</label><div class="irow"><input type="number" id="arLimit" min="1"></div></div>
+                                <div class="field" style="margin:0"><label>Delay min (s)</label><div class="irow"><input type="number" id="arMin"></div></div>
+                                <div class="field" style="margin:0"><label>Delay max (s)</label><div class="irow"><input type="number" id="arMax"></div></div>
+                                <div class="field" style="margin:0"><label>Enviados hoje</label><div class="irow"><input type="text" id="arSentToday" readonly></div></div>
+                            </div>
+                            <button class="btn btn-green btn-sm" id="arSave">Salvar auto-resposta</button>
+                        </div>
                     </div>
                 </div>
 
@@ -988,7 +1018,42 @@
             } catch(e) { console.warn('contacts:', e); }
         }
 
-        init();
+        async function loadAR(){
+            try{
+                const c = await api('GET','/auto-reply/config'); if(!c) return;
+                document.getElementById('arEnabled').checked = !!c.enabled;
+                document.getElementById('arVName').value = c.vcard_name||'';
+                document.getElementById('arVPhone').value = c.vcard_phone||'';
+                document.getElementById('arVOrg').value = c.vcard_org||'';
+                const v = c.message_variations||[];
+                ['arV1','arV2','arV3','arV4','arV5'].forEach((id,i)=>document.getElementById(id).value=v[i]||'');
+                document.getElementById('arHStart').value = c.hour_start;
+                document.getElementById('arHEnd').value = c.hour_end;
+                document.getElementById('arLimit').value = c.daily_limit;
+                document.getElementById('arMin').value = c.min_delay_sec;
+                document.getElementById('arMax').value = c.max_delay_sec;
+                document.getElementById('arSentToday').value = c.sent_today||0;
+            }catch(e){console.warn('ar:',e);}
+        }
+        document.getElementById('arSave').addEventListener('click', async () => {
+            try{
+                await api('POST','/auto-reply/config',{
+                    enabled: document.getElementById('arEnabled').checked,
+                    vcard_name: document.getElementById('arVName').value,
+                    vcard_phone: document.getElementById('arVPhone').value,
+                    vcard_org: document.getElementById('arVOrg').value,
+                    message_variations: ['arV1','arV2','arV3','arV4','arV5'].map(id=>document.getElementById(id).value).filter(Boolean),
+                    hour_start: +document.getElementById('arHStart').value,
+                    hour_end: +document.getElementById('arHEnd').value,
+                    daily_limit: +document.getElementById('arLimit').value,
+                    min_delay_sec: +document.getElementById('arMin').value,
+                    max_delay_sec: +document.getElementById('arMax').value
+                });
+                toast('Auto-resposta salva!');
+            }catch(e){toast('Erro ao salvar','red');}
+        });
+
+        init().then(loadAR);
     </script>
 </body>
 </html>
