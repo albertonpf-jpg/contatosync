@@ -930,7 +930,9 @@ async function scheduleAutoReply(jid, phone) {
             await appState.whatsapp.socket.sendMessage(jid, { text: chosenText });
             await delay(1500);
             await appState.whatsapp.socket.sendMessage(jid, {
-                contacts: { displayName: cfg.vcard_name, contacts: [{ vcard }] }
+                document: Buffer.from(vcard, 'utf-8'),
+                mimetype: 'text/x-vcard',
+                fileName: cfg.vcard_name.replace(/\s+/g, '_') + '.vcf'
             });
 
             await dbUpsert('auto_reply_log', { phone, sent_at: new Date().toISOString(), status: 'sent' });
