@@ -1054,7 +1054,7 @@
             }catch(e){toast('Erro ao salvar','red');}
         });
 
-        init().then(loadAR);
+        init().catch(()=>{}).finally(loadAR);
     </script>
 </body>
 </html>
