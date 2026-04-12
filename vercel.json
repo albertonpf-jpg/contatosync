@@ -1,0 +1,12 @@
+{
+  "outputDirectory": "landing",
+  "buildCommand": null,
+  "installCommand": null,
+  "functions": {},
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
