@@ -174,12 +174,20 @@ const Storage = {
     },
 
     // ============ ACTIVITIES ============
-    async getActivities(limit = 100) {
-        const { data, error } = await supabaseClient
+    async getActivities(limit = 1000, days = null) {
+        let query = supabaseClient
             .from('activities')
             .select('*')
-            .order('timestamp', { ascending: false })
-            .limit(limit);
+            .order('timestamp', { ascending: false });
+
+        // Se days for especificado, filtra por período
+        if (days) {
+            const dateLimit = new Date();
+            dateLimit.setDate(dateLimit.getDate() - days);
+            query = query.gte('timestamp', dateLimit.toISOString());
+        }
+
+        const { data, error } = await query.limit(limit);
 
         if (error) {
             console.error('Erro ao buscar atividades:', error);

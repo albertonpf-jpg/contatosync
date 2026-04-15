@@ -1207,6 +1207,70 @@ app.use((err, req, res, next) => {
 app.get('*', (req, res) => res.status(404).send('Not found'));
 
 // =============================================
+// PROCESSAMENTO DE FILA AUTO-REPLY
+// =============================================
+async function processePendingQueue() {
+    try {
+        if (!autoReplyConfig || !autoReplyConfig.enabled) return;
+
+        // Se não estamos dentro do horário, não processa
+        if (!isWithinHours(autoReplyConfig)) return;
+
+        let processed = 0;
+        for (const [jid, timerInfo] of pendingReplies.entries()) {
+            // Cancela timer antigo
+            clearTimeout(timerInfo);
+
+            // Calcula novo delay aleatório
+            const delayMs = Math.random() * (autoReplyConfig.max_delay_sec - autoReplyConfig.min_delay_sec) * 1000
+                          + autoReplyConfig.min_delay_sec * 1000;
+
+            // Agenda para envio
+            const newTimerId = setTimeout(async () => {
+                pendingReplies.delete(jid);
+                try {
+                    if (!isWithinHours(autoReplyConfig)) return;
+
+                    const phone = jid.replace('@s.whatsapp.net', '');
+                    if (await alreadyReplied(phone)) return;
+
+                    const count = await countRepliesToday();
+                    if (count >= autoReplyConfig.daily_limit) return;
+
+                    await executeAutoReply(jid, phone);
+                    debugLog(`📨 Auto-reply reprocessado para ${phone}`);
+
+                } catch (error) {
+                    debugLog('Erro ao reprocessar auto-reply: ' + error.message);
+                }
+            }, delayMs);
+
+            // Atualiza o timer na fila
+            pendingReplies.set(jid, newTimerId);
+            processed++;
+
+            debugLog(`📨 Reprocessando fila: ${jid.replace('@s.whatsapp.net', '')} (delay: ${Math.round(delayMs/1000)}s)`);
+        }
+
+        if (processed > 0) {
+            log(`✅ Fila auto-reply reprocessada: ${processed} mensagens`);
+        }
+
+    } catch (error) {
+        debugLog('Erro ao processar fila auto-reply: ' + error.message);
+    }
+}
+
+function initAutoReplyQueueProcessor() {
+    // Verificar fila pendente a cada 5 minutos
+    setInterval(async () => {
+        await processePendingQueue();
+    }, 5 * 60 * 1000); // 5 minutos
+
+    log('🔄 Auto-reply queue processor iniciado (verificação a cada 5min)');
+}
+
+// =============================================
 // INICIALIZAÇÃO — servidor sobe primeiro
 // =============================================
 const PORT = process.env.PORT || 3000;
@@ -1215,6 +1279,9 @@ const server = app.listen(PORT, () => {
     setTimeout(async () => {
         await initData();
         initWhatsApp().catch(e => log('Erro ao iniciar WhatsApp: ' + e.message, 'error'));
+
+        // Iniciar verificação da fila de auto-reply
+        initAutoReplyQueueProcessor();
     }, 500);
 });
 
